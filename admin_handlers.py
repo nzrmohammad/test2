@@ -546,7 +546,7 @@ def handle_admin_callbacks(call: types.CallbackQuery):
             text = fmt_marzban_system_stats(stats)
             kb = types.InlineKeyboardMarkup()
             kb.add(types.InlineKeyboardButton("🔙 بازگشت به تحلیل‌ها", callback_data="admin_analytics_menu_marzban"))
-            _safe_edit(uid, msg_id, text, reply_markup=kb, parse_mode=None)
+            _safe_edit(uid, msg_id, text, reply_markup=kb)
         except Exception as e:
             logger.error(f"ADMIN MARZBAN STATS Error for chat {uid}: {e}")
             _safe_edit(uid, msg_id, "❌ خطایی در دریافت اطلاعات سیستم مرزبان رخ داد\\.", reply_markup=menu.admin_analytics_menu(panel='marzban'))

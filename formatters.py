@@ -475,7 +475,7 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
 def fmt_marzban_system_stats(info: dict) -> str:
     """Formats the Marzban panel system status information as plain text."""
     if not info:
-        return "اطلاعاتی از سیستم دریافت نشد."
+        return "اطلاعاتی از سیستم دریافت نشد\\."
     
     # --- START OF FIX: Formatting the full system stats ---
     version = info.get('version', 'N/A')
@@ -512,5 +512,5 @@ def fmt_marzban_system_stats(info: dict) -> str:
         f"↑ آپلود: {up_speed_mbps:.2f} MB/s\n"
         f"↓ دانلود: {down_speed_mbps:.2f} MB/s"
     )
-    return report
+    return escape_markdown(report)
     # --- END OF FIX ---
