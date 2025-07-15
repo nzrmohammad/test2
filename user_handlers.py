@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import logging
 from telebot import types, telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -7,17 +5,11 @@ from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS
 from database import db
 from api_handler import api_handler
 from menu import menu
-from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links
-from formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
+from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links, _safe_edit
+from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
 
 logger = logging.getLogger(__name__)
 bot = telebot.TeleBot("YOUR_BOT_TOKEN") # Placeholder
-
-def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
-    """A helper function to safely edit messages."""
-    try: bot.edit_message_text(text, chat_id, msg_id, **kwargs)
-    except Exception as e:
-        if 'message is not modified' not in str(e): logger.error(f"User safe edit error: {e}")
 
 # --- توابع مکالمه (Conversation Functions) ---
 def _save_first_uuid(message: types.Message):

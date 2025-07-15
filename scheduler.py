@@ -12,7 +12,8 @@ from database import db
 from api_handler import api_handler
 from utils import escape_markdown
 from menu import menu
-from formatters import fmt_admin_report, fmt_user_report, fmt_online_users_list
+from admin_formatters import fmt_admin_report, fmt_online_users_list
+from user_formatters import fmt_user_report
 
 logger = logging.getLogger(__name__)
 

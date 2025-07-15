@@ -17,6 +17,13 @@ from callback_router import register_callback_router
 
 # ==================== بخش تنظیمات لاگ ====================
 
+class UserIdFilter(logging.Filter):
+    """A filter to add a default user_id to records that don't have one."""
+    def filter(self, record):
+        if not hasattr(record, 'user_id'):
+            record.user_id = 'SYSTEM'  # Add a default value
+        return True
+
 LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — [User:%(user_id)s] — %(message)s"
 DEFAULT_LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — %(message)s"
 
@@ -24,23 +31,25 @@ DEFAULT_LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — %(message)s
 root_logger = logging.getLogger()
 root_logger.setLevel(LOG_LEVEL)
 
-# پاک کردن هندلرهای قبلی برای جلوگیری از لاگ تکراری
+# پاک کردن هندلرهای قبلی
 if root_logger.hasHandlers():
     root_logger.handlers.clear()
 
-# ۱. ساخت هندلر برای فایل bot.log (تمام لاگ‌ها از سطح INFO به بالا)
+# ۱. ساخت هندلر برای فایل bot.log
 info_handler = logging.FileHandler("bot.log", encoding="utf-8")
 info_handler.setLevel(logging.INFO)
-info_formatter = logging.Formatter(DEFAULT_LOG_FORMAT) # فرمت پیش‌فرض
+info_formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
 info_handler.setFormatter(info_formatter)
 
-# ۲. ساخت هندلر برای فایل error.log (فقط لاگ‌های از سطح ERROR به بالا)
+# ۲. ساخت هندلر برای فایل error.log
 error_handler = logging.FileHandler("error.log", encoding="utf-8")
 error_handler.setLevel(logging.ERROR)
-error_formatter = logging.Formatter(LOG_FORMAT) # فرمت کامل با یوزر آیدی
+error_formatter = logging.Formatter(LOG_FORMAT)
 error_handler.setFormatter(error_formatter)
+# 2. APPLY THE FILTER TO THE ERROR HANDLER
+error_handler.addFilter(UserIdFilter())
 
-# ۳. ساخت هندلر برای نمایش در کنسول (stdout)
+# ۳. ساخت هندلر برای نمایش در کنسول
 stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(info_formatter)
@@ -53,7 +62,6 @@ root_logger.addHandler(stream_handler)
 
 # لاگر اصلی این ماژول
 logger = logging.getLogger(__name__)
-
 # Create the single bot instance
 bot = TeleBot(BOT_TOKEN, parse_mode=None)
 initialize_utils(bot)

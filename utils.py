@@ -22,37 +22,27 @@ def validate_uuid(uuid_str: str) -> bool:
     """Validates if a string matches the UUID format."""
     return bool(_UUID_RE.match(uuid_str.strip())) if uuid_str else False
 
-def _safe_edit(chat_id: int, msg_id: int, text: str, reply_markup=None):
-    """
-    A robust function to ONLY edit messages.
-    - It automatically escapes text for MarkdownV2.
-    - It gracefully handles "Not Found" and "Not Modified" errors.
-    """
+def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
     if not bot:
         logger.error("Util's bot instance is not initialized!")
         return
     try:
-        # Automatically escape the text before sending
-        escaped_text = escape_markdown(text)
+        kwargs.setdefault('parse_mode', 'MarkdownV2')
         
         bot.edit_message_text(
-            text=escaped_text,
+            text=text,
             chat_id=chat_id,
             message_id=msg_id,
-            reply_markup=reply_markup,
-            parse_mode="MarkdownV2"
+            **kwargs
         )
     except Exception as e:
-        # If the message is not found or not modified, just ignore the error.
-        # This prevents crashes and unwanted new messages.
         if 'message not found' in str(e) or 'message is not modified' in str(e):
-            pass  # Silently ignore these specific errors
+            pass
         else:
-            # Log any other unexpected errors
-            logger.error(f"Safe edit failed with an unexpected error: {e}")
+            log_adapter = logging.LoggerAdapter(logger, {'user_id': chat_id})
+            log_adapter.error(f"Safe edit failed with an unexpected error: {e}")
 
 def safe_float(value, default: float = 0.0) -> float:
-    """Safely converts a value to float, returning a default on failure."""
     try:
         return float(value)
     except (ValueError, TypeError):
@@ -81,7 +71,6 @@ def persian_date(dt: Optional[datetime]) -> str:
     if not isinstance(dt, datetime):
         return "نامشخص"
     
-    # Convert to Tehran time zone if it's not already
     tehran_tz = pytz.timezone("Asia/Tehran")
     dt_tehran = dt.astimezone(tehran_tz)
     
@@ -95,12 +84,9 @@ def format_daily_usage(gb: float) -> str:
     return f"{gb:.2f} GB"
     
 def escape_markdown(text: str) -> str:
-    """Escapes special characters for Telegram's MarkdownV2 parser."""
     if not isinstance(text, str):
         text = str(text)
-    # Characters to escape for MarkdownV2
     escape_chars = r'_*[]()~`>#+-=|{}.!'
-    # Use re.sub to escape each character with a preceding backslash
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 def shamsi_to_gregorian(shamsi_str: str) -> Optional[datetime.date]:
