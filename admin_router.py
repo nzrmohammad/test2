@@ -38,44 +38,54 @@ def register_admin_handlers(b: telebot.TeleBot):
 # --- Search Flow ---
 def _ask_for_search_query(uid, msg_id, panel: str):
     prompt = "لطفاً نام یا UUID کاربر مورد نظر برای جستجو در این پنل را وارد کنید:"
-    admin_conversations[uid] = {'panel': panel}
+    # --- START OF FIX: Store message_id for later editing ---
+    admin_conversations[uid] = {'panel': panel, 'msg_id': msg_id}
+    # --- END OF FIX ---
     _safe_edit(uid, msg_id, prompt,
                reply_markup=menu.cancel_action(f"admin_manage_panel_{panel}"),
                parse_mode="MarkdownV2")
     bot.register_next_step_handler_by_chat_id(uid, _handle_user_search)
 
 def _handle_user_search(message: types.Message):
-    uid, query = message.from_user.id, message.text.strip().lower()
-    if uid not in admin_conversations or 'panel' not in admin_conversations[uid]:
-        bot.send_message(uid, "خطا: اطلاعات پنل یافت نشد\\. لطفاً دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
+    uid, query = message.from_user.id, message.text.strip()
+    
+    convo_data = admin_conversations.pop(uid, None)
+    if not convo_data or 'panel' not in convo_data or 'msg_id' not in convo_data:
+        bot.send_message(uid, "خطا: اطلاعات جستجو یافت نشد\\. لطفاً دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
         return
     
-    panel = admin_conversations.pop(uid)['panel']
+    panel = convo_data['panel']
+    original_msg_id = convo_data['msg_id']
+
+    try:
+        bot.delete_message(uid, message.message_id)
+    except Exception:
+        pass
+
     if not query:
-        bot.send_message(uid, "جستجو لغو شد\\.", parse_mode="MarkdownV2")
+        _safe_edit(uid, original_msg_id, "جستجو لغو شد\\.", reply_markup=menu.admin_panel_management_menu(panel), parse_mode="MarkdownV2")
         return
         
-    wait_msg = bot.send_message(uid, "⏳ در حال جستجو\\.\\.\\.", parse_mode="MarkdownV2")
+    _safe_edit(uid, original_msg_id, "⏳ در حال جستجو\\.\\.\\.", reply_markup=None, parse_mode="MarkdownV2")
+    
     all_users = api_handler.get_all_users(panel=panel)
     found_user = next((u for u in all_users if query.lower() in u.get('name', '').lower() or query.lower() in u.get('uuid', '').lower()), None)
     
-    bot.delete_message(uid, wait_msg.message_id)
-
     if found_user:
         identifier = found_user.get('uuid')
         info = api_handler.user_info(identifier)
         if not info:
-            bot.send_message(uid, f"❌ خطایی در دریافت جزئیات کاربر `{escape_markdown(query)}` رخ داد\\.", reply_markup=menu.admin_panel_management_menu(panel), parse_mode="MarkdownV2")
+            err_msg = f"❌ خطایی در دریافت جزئیات کاربر `{escape_markdown(query)}` رخ داد\\."
+            _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.admin_panel_management_menu(panel), parse_mode="MarkdownV2")
             return
 
         daily_usage = db.get_usage_since_midnight_by_uuid(identifier)
         text = fmt_one(info, daily_usage)
         kb = menu.admin_user_interactive_management(info.get('uuid'), info['is_active'], panel)
-        bot.send_message(uid, text, reply_markup=kb, parse_mode="MarkdownV2")
+        _safe_edit(uid, original_msg_id, text, reply_markup=kb)
     else:
-        err_msg = f"❌ کاربری با مشخصات `{escape_markdown(query)}` در این پنل یافت نشد\\."
-        bot.send_message(uid, err_msg, reply_markup=menu.admin_panel_management_menu(panel), parse_mode="MarkdownV2")
-
+        err_msg = f"❌ کاربری با مشخصات `{escape_markdown(query)}` در این پنل یافت نشد."
+        _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.cancel_action(f"admin_manage_panel_{panel}"), parse_mode="MarkdownV2")
 
 # --- Broadcast Flow ---
 def _start_broadcast_flow(uid, msg_id):

@@ -23,10 +23,12 @@ def validate_uuid(uuid_str: str) -> bool:
     return bool(_UUID_RE.match(uuid_str.strip())) if uuid_str else False
 
 def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
+    """A safe version of edit_message_text that handles common errors."""
     if not bot:
         logger.error("Util's bot instance is not initialized!")
         return
     try:
+        # Set MarkdownV2 as default, but allow it to be overridden (e.g., with None or HTML)
         kwargs.setdefault('parse_mode', 'MarkdownV2')
         
         bot.edit_message_text(
@@ -36,6 +38,7 @@ def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
             **kwargs
         )
     except Exception as e:
+        # Ignore errors for messages that are not found or not modified
         if 'message not found' in str(e) or 'message is not modified' in str(e):
             pass
         else:
@@ -49,7 +52,6 @@ def safe_float(value, default: float = 0.0) -> float:
         return default
 
 def create_progress_bar(percent: float, length: int = 15) -> str:
-    """Creates a textual progress bar with color-coded emoji."""
     percent = max(0, min(100, percent))
     filled_count = int(percent / 100 * length)
     
@@ -61,7 +63,9 @@ def create_progress_bar(percent: float, length: int = 15) -> str:
     filled_bar = '█' * filled_count
     empty_bar = '░' * (length - filled_count)
     
-    return f"{color} [{filled_bar}{empty_bar}] {percent:.1f}%"
+    escaped_percent = escape_markdown(f"{percent:.1f}")
+
+    return f"{color} `[{filled_bar}{empty_bar}] {escaped_percent}%`"
 
 def persian_date(dt: Optional[datetime]) -> str:
     """

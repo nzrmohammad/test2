@@ -168,8 +168,8 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
     return "\n".join(report_lines)
 
 def fmt_hiddify_panel_info(info: dict) -> str:
-    """Formats the panel health check info with emojis."""
-    if not info: return "اطلاعاتی از پنل دریافت نشد\\."
+    if not info: 
+        return escape_markdown("اطلاعاتی از پنل دریافت نشد.")
     
     title = escape_markdown(info.get('title', 'N/A'))
     description = escape_markdown(info.get('description', 'N/A'))

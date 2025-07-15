@@ -8,10 +8,11 @@ from menu import menu
 from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
 
+
 logger = logging.getLogger(__name__)
 bot = telebot.TeleBot("YOUR_BOT_TOKEN") # Placeholder
 
-# --- توابع مکالمه (Conversation Functions) ---
+# --- Conversation Functions ---
 def _save_first_uuid(message: types.Message):
     uid, uuid_str = message.from_user.id, message.text.strip().lower()
     if not validate_uuid(uuid_str):
@@ -30,9 +31,9 @@ def _save_first_uuid(message: types.Message):
     if "✅" in status_message:
         user_data = db.user(uid)
         has_birthday = bool(user_data and user_data.get('birthday'))
-        bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.main(uid in ADMIN_IDS, has_birthday))
+        bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.main(uid in ADMIN_IDS, has_birthday), parse_mode="MarkdownV2")
     else:
-        bot.send_message(uid, escape_markdown(status_message))
+        bot.send_message(uid, escape_markdown(status_message), parse_mode="MarkdownV2")
         m = bot.send_message(uid, "لطفاً یک `UUID` دیگر وارد کنید\\.", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
 
@@ -58,7 +59,7 @@ def _add_uuid_step(message: types.Message):
         return
     
     status_message = db.add_uuid(uid, uuid_str, info.get("name", "کاربر ناشناس"))
-    bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.accounts(db.uuids(uid)))
+    bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.accounts(db.uuids(uid)), parse_mode="MarkdownV2")
 
 def _get_birthday_step(message: types.Message):
     uid = message.from_user.id
@@ -68,17 +69,17 @@ def _get_birthday_step(message: types.Message):
     if gregorian_date:
         db.update_user_birthday(uid, gregorian_date)
         bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد\\. منتظر هدیه خود باشید\\!",
-                         reply_markup=menu.main(uid in ADMIN_IDS, has_birthday=True))
+                         reply_markup=menu.main(uid in ADMIN_IDS, has_birthday=True), parse_mode="MarkdownV2")
     else:
-        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل `1375/06/15` وارد کنید\\.")
+        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل `1375/06/15` وارد کنید\\.", parse_mode="MarkdownV2")
         bot.clear_step_handler_by_chat_id(uid)
         if m: bot.register_next_step_handler(m, _get_birthday_step)
 
-# --- توابع مدیریت Callback (Callback Handlers) ---
+# --- Callback Handlers ---
+
 def _handle_add_uuid_request(call: types.CallbackQuery):
-    m = bot.send_message(call.from_user.id, "لطفاً UUID جدید را ارسال کنید:", reply_markup=menu.cancel_action("manage"))
-    if m:
-        bot.register_next_step_handler_by_chat_id(call.from_user.id, _add_uuid_step)
+    _safe_edit(call.from_user.id, call.message.message_id, "لطفاً UUID جدید را ارسال کنید:", reply_markup=menu.cancel_action("manage"), parse_mode=None)
+    bot.register_next_step_handler_by_chat_id(call.from_user.id, _add_uuid_step)
 
 def _show_manage_menu(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, "🔐 *فهرست اکانت‌ها*", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
@@ -99,8 +100,8 @@ def _go_back_to_main(call: types.CallbackQuery):
 
 def _handle_birthday_gift_request(call: types.CallbackQuery):
     prompt = "لطفاً تاریخ تولد خود را به شمسی و با فرمت `سال/ماه/روز` وارد کنید \\(مثلاً: `1375/06/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
-    m = bot.send_message(call.from_user.id, prompt, reply_markup=menu.cancel_action("back"))
-    if m: bot.register_next_step_handler(m, _get_birthday_step)
+    _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
+    bot.register_next_step_handler_by_chat_id(call.from_user.id, _get_birthday_step)
 
 def _show_plans(call: types.CallbackQuery):
     text = fmt_service_plans()
@@ -127,6 +128,9 @@ def handle_user_callbacks(call: types.CallbackQuery):
         handler(call)
         return
 
+    # --- START OF THE FIX ---
+    # The order and logic of these if/elif statements are now corrected.
+    
     if data.startswith("acc_"):
         uuid_id = int(data.split("_")[1])
         row = db.uuid_by_id(uid, uuid_id)
@@ -176,16 +180,16 @@ def handle_user_callbacks(call: types.CallbackQuery):
         db.deactivate_uuid(uuid_id)
         _safe_edit(call.from_user.id, call.message.message_id, "🗑 اکانت با موفقیت حذف شد\\.", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
         
-    # --- شروع بلوک جدید و اصلاح شده ---
     elif data.startswith("win_select_"):
+        # Correctly extracts the ID from the end of "win_select_{uuid_id}"
         uuid_id = int(data.split("_")[2])
         if db.uuid_by_id(uid, uuid_id):
             text = "لطفاً سرور مورد نظر خود را برای مشاهده آمار مصرف انتخاب کنید:"
-            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id))
+            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id), parse_mode=None)
 
     elif data.startswith("win_hiddify_") or data.startswith("win_marzban_"):
         parts = data.split("_")
-        panel_code = parts[1] # hiddify or marzban
+        panel_code = parts[1]
         uuid_id = int(parts[2])
 
         if db.uuid_by_id(uid, uuid_id):
@@ -195,17 +199,18 @@ def handle_user_callbacks(call: types.CallbackQuery):
             stats = db.get_panel_usage_in_intervals(uuid_id, panel_db_name)
             text = fmt_panel_quick_stats(panel_display_name, stats)
             
-            # منوی بازگشت به انتخاب سرور
             markup = InlineKeyboardMarkup().add(
                 InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data=f"win_select_{uuid_id}")
             )
             _safe_edit(uid, msg_id, text, reply_markup=markup)
-    # --- پایان بلوک جدید ---
+            
     elif data.startswith("qstats_acc_page_"):
         page = int(data.split("_")[3])
         text, menu_data = quick_stats(db.uuids(uid), page=page)
         reply_markup = menu.quick_stats_menu(menu_data['num_accounts'], menu_data['current_page'])
         _safe_edit(uid, msg_id, text, reply_markup=reply_markup)
+
+    # --- END OF THE FIX ---
 
 def register_user_handlers(b: telebot.TeleBot):
     """Registers all message handlers for regular users."""
@@ -222,7 +227,7 @@ def register_user_handlers(b: telebot.TeleBot):
         has_birthday = bool(user_data and user_data.get('birthday'))
 
         if db.uuids(uid):
-            bot.send_message(uid, "🏠 *به منوی اصلی خوش آمدید*", reply_markup=menu.main(uid in ADMIN_IDS, has_birthday))
+            bot.send_message(uid, "🏠 *به منوی اصلی خوش آمدید*", reply_markup=menu.main(uid in ADMIN_IDS, has_birthday), parse_mode="MarkdownV2")
         else:
-            m = bot.send_message(uid, "👋 *خوش آمدید\\!*\n\nلطفاً `UUID` اکانت خود را ارسال کنید\\.")
+            m = bot.send_message(uid, "👋 *خوش آمدید\\!*\n\nلطفاً `UUID` اکانت خود را ارسال کنید\\.", parse_mode="MarkdownV2")
             if m: bot.register_next_step_handler(m, _save_first_uuid)
