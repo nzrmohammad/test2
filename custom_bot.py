@@ -1,30 +1,23 @@
-# main.py
-# ─────────────────────── اجرای ربات هیدیفای ───────────────────────
-
 import logging
 import sys
 import signal
 import time
 from datetime import datetime
 from telebot import TeleBot
-
+from utils import initialize_utils
 from config import LOG_LEVEL, LOG_FORMAT, ADMIN_IDS, BOT_TOKEN
 from database import db
 from api_handler import api_handler
 
-# --- تغییر: وارد کردن چرخه‌ای حذف شد و فقط کلاس وارد می‌شود ---
 from scheduler import SchedulerManager
 
-# Import the new handler registration functions
 from user_handlers import register_user_handlers
-from admin_handlers import register_admin_handlers
+from admin_router import register_admin_handlers
 from callback_router import register_callback_router
 
 # ==================== بخش تنظیمات لاگ ====================
 
-# فرمت جدید لاگ که شامل یوزر آیدی هم می‌شود
 LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — [User:%(user_id)s] — %(message)s"
-# یک فرمت ساده‌تر برای لاگ‌هایی که به کاربر خاصی مربوط نیستند
 DEFAULT_LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — %(message)s"
 
 # گرفتن لاگر اصلی
@@ -62,9 +55,8 @@ root_logger.addHandler(stream_handler)
 logger = logging.getLogger(__name__)
 
 # Create the single bot instance
-bot = TeleBot(BOT_TOKEN, parse_mode="MarkdownV2")
-
-# --- تغییر: نمونه scheduler اینجا با پاس دادن bot ساخته می‌شود ---
+bot = TeleBot(BOT_TOKEN, parse_mode=None)
+initialize_utils(bot)
 scheduler = SchedulerManager(bot)
 
 def _notify_admins_start() -> None:

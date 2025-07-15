@@ -117,12 +117,10 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
     return "\n".join(lines)
 
 def fmt_online_users_list(users: list, page: int) -> str:
-    # --- مشکل اینجا بود و برطرف شد ---
     title = "⚡️ کاربران آنلاین (۳ دقیقه اخیر)"
-    # ---------------------------------
     
     if not users:
-        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این لحظه آنلاین نیست."
+        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این لحظه آنلاین نیست\\."
 
     uuid_to_bot_user = db.get_uuid_to_bot_user_map()
     header_lines = [f"*{escape_markdown(title)}*"]
@@ -165,7 +163,7 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
         "current_page": 0
     }
     if num_uuids == 0:
-        return "هیچ اکانتی ثبت نشده است.", menu_data
+        return "هیچ اکانتی ثبت نشده است\\.", menu_data
 
     current_page = max(0, min(page, num_uuids - 1))
     menu_data["current_page"] = current_page
@@ -181,10 +179,6 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
 
     daily_usage_dict = db.get_usage_since_midnight(uuid_id)
     name = escape_markdown(info.get("name", "کاربر ناشناس"))
-    
-    # --- START OF FINAL FIX ---
-    # Pre-format all numbers to strings first, then escape them.
-    # This is the most reliable way to handle the '.' character.
 
     # Volume Stats
     limit_h_str = escape_markdown(f"{info.get('breakdown', {}).get('hiddify', {}).get('limit', 0.0):.2f}")
@@ -231,7 +225,6 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
         f"فرانسه 🇫🇷: `{daily_m_str}`\n"
         f"*مجموع :* `{daily_total_str}`"
     )
-    # --- END OF FINAL FIX ---
     
     return report, menu_data
 
@@ -473,44 +466,81 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
     return "\n".join(lines)
 
 def fmt_marzban_system_stats(info: dict) -> str:
-    """Formats the Marzban panel system status information as plain text."""
+    """Formats the Marzban panel system status information with all details."""
     if not info:
-        return "اطلاعاتی از سیستم دریافت نشد\\."
-    
-    # --- START OF FIX: Formatting the full system stats ---
+        return escape_markdown("اطلاعاتی از سیستم دریافت نشد\\.")
+
+    # Helper for GB conversion
+    to_gb = lambda b: b / (1024**3)
+
+    # --- System Info ---
     version = info.get('version', 'N/A')
-    
-    # Memory
-    mem_total_gb = info.get('mem_total', 0) / (1024**3)
-    mem_used_gb = info.get('mem_used', 0) / (1024**3)
+    mem_total_gb = to_gb(info.get('mem_total', 0))
+    mem_used_gb = to_gb(info.get('mem_used', 0))
     mem_percent = (mem_used_gb / mem_total_gb * 100) if mem_total_gb > 0 else 0
-    
-    # CPU
     cpu_cores = info.get('cpu_cores', 'N/A')
     cpu_usage = info.get('cpu_usage', 0.0)
-    
-    # Users
+
+    # --- User Stats ---
     total_users = info.get('total_user', 0)
     online_users = info.get('online_users', 0)
-    
-    # Bandwidth (convert B/s to MB/s)
-    up_speed_mbps = info.get('outgoing_bandwidth_speed', 0) / (1024 * 1024)
-    down_speed_mbps = info.get('incoming_bandwidth_speed', 0) / (1024 * 1024)
+    active_users = info.get('users_active', 0)
+    disabled_users = info.get('users_disabled', 0)
+    expired_users = info.get('users_expired', 0)
+
+    # --- Bandwidth Stats ---
+    total_dl_gb = to_gb(info.get('incoming_bandwidth', 0))
+    total_ul_gb = to_gb(info.get('outgoing_bandwidth', 0))
+    speed_dl_mbps = info.get('incoming_bandwidth_speed', 0) / (1024 * 1024)
+    speed_ul_mbps = info.get('outgoing_bandwidth_speed', 0) / (1024 * 1024)
 
     report = (
-        f"وضعیت سیستم پنل مرزبان (فرانسه 🇫🇷)\n"
+        f"📊 وضعیت سیستم پنل مرزبان (فرانسه 🇫🇷)\n"
         f"------------------------------------\n"
-        f"نسخه: {version}\n"
+        f"⚙️ نسخه: {version}\n"
+        f"🖥️ هسته CPU: {cpu_cores} | مصرف: {cpu_usage:.1f}%\n"
+        f"💾 مصرف RAM: {mem_used_gb:.2f} / {mem_total_gb:.2f} GB ({mem_percent:.1f}%)\n"
         f"------------------------------------\n"
-        f"مصرف CPU: {cpu_usage:.1f}% از {cpu_cores} هسته\n"
-        f"مصرف RAM: {mem_used_gb:.2f} GB / {mem_total_gb:.2f} GB ({mem_percent:.1f}%)\n"
+        f"👥 کاربران کل: {total_users}\n"
+        f"🟢 فعال: {active_users}\n"
+        f"🔴 آنلاین: {online_users}\n"
+        f"⚪️ غیرفعال: {disabled_users}\n"
+        f"🗓 منقضی شده: {expired_users}\n"
         f"------------------------------------\n"
-        f"تعداد کل کاربران: {total_users}\n"
-        f"کاربران آنلاین: {online_users}\n"
-        f"------------------------------------\n"
-        f"سرعت لحظه‌ای شبکه:\n"
-        f"↑ آپلود: {up_speed_mbps:.2f} MB/s\n"
-        f"↓ دانلود: {down_speed_mbps:.2f} MB/s"
+        f"📈 ترافیک کل:\n"
+        f"  ↓ دانلود: {total_dl_gb:.2f} GB\n"
+        f"  ↑ آپلود: {total_ul_gb:.2f} GB\n"
+        f"🚀 سرعت لحظه‌ای:\n"
+        f"  ↓ دانلود: {speed_dl_mbps:.2f} MB/s\n"
+        f"  ↑ آپلود: {speed_ul_mbps:.2f} MB/s"
     )
+    
+    # Escape the entire report to prevent any markdown errors
     return escape_markdown(report)
-    # --- END OF FIX ---
+
+def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
+    title = f"کاربران پنل {panel_name}"
+    if not users:
+        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این پنل یافت نشد\\."
+
+    header_lines = [f"*{escape_markdown(title)}*"]
+    if len(users) > PAGE_SIZE:
+        total_pages = (len(users) + PAGE_SIZE - 1) // PAGE_SIZE
+        header_lines.append(f"\\(صفحه {page + 1} از {total_pages} \\| کل: {len(users)}\\)")
+
+    paginated_users = users[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+    user_lines = []
+
+    for user in paginated_users:
+        name = escape_markdown(user.get('name', 'کاربر ناشناس'))
+        expire_days = user.get("expire")
+        expire_text = "نامحدود"
+        if expire_days is not None:
+            expire_text = f"{expire_days} روز" if expire_days >= 0 else "منقضی"
+        
+        line = f"`•` *{name}* `|` {EMOJIS['calendar']} {expire_text}"
+        user_lines.append(line)
+
+    header_text = "\n".join(header_lines)
+    body_text = "\n".join(user_lines)
+    return f"{header_text}\n\n{body_text}"

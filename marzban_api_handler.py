@@ -1,9 +1,10 @@
 import requests
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from config import MARZBAN_API_BASE_URL, MARZBAN_API_USERNAME, MARZBAN_API_PASSWORD, API_TIMEOUT
+from database import db
 
 logger = logging.getLogger(__name__)
 
@@ -45,58 +46,102 @@ class MarzbanAPIHandler:
             logger.error(f"Marzban: Failed to get access token: {e}")
             return None
 
+    def add_user(self, user_data: dict) -> dict | None:
+        """Adds a new user to the Marzban panel."""
+        if not self.access_token:
+            return None
+        
+        try:
+            url = f"{self.base_url}/api/user"
+            headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
+            
+            # Prepare data for Marzban API
+            expire_timestamp = 0
+            if user_data.get('package_days', 0) > 0:
+                expire_timestamp = int((datetime.now() + timedelta(days=user_data.get('package_days', 0))).timestamp())
+
+            payload = {
+                "username": user_data.get('username'),
+                "proxies": {"vless": {}}, # Default proxy setting
+                "data_limit": int(user_data.get('usage_limit_GB', 0) * (1024**3)),
+                "expire": expire_timestamp,
+            }
+            
+            response = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban: Failed to add user '{user_data.get('username')}': {e}")
+            return None
+
+    def modify_user(self, username: str, add_usage_gb: float = 0, add_days: int = 0) -> bool:
+        """Modifies an existing Marzban user."""
+        if not self.access_token:
+            return False
+        
+        try:
+            get_url = f"{self.base_url}/api/user/{username}"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            current_response = requests.get(get_url, headers=headers, timeout=API_TIMEOUT)
+            current_response.raise_for_status()
+            current_data = current_response.json()
+
+            payload = {}
+            if add_usage_gb != 0:
+                current_limit = current_data.get('data_limit', 0)
+                payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
+
+            if add_days != 0:
+                current_expire_ts = current_data.get('expire', 0)
+                base_time = datetime.fromtimestamp(current_expire_ts) if current_expire_ts > 0 else datetime.now()
+                if base_time < datetime.now():
+                    base_time = datetime.now()
+                new_expire_dt = base_time + timedelta(days=add_days)
+                payload['expire'] = int(new_expire_dt.timestamp())
+
+            if not payload:
+                return True
+
+            put_url = f"{self.base_url}/api/user/{username}"
+            response = requests.put(put_url, headers=headers, json=payload, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban: Failed to modify user '{username}': {e}")
+            return False
+    # --- END OF CODE TO ADD ---
+
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:
-        """
-        رشته تاریخ API مرزبان را به شیء datetime استاندارد تبدیل می‌کند.
-        این نسخه برای کار با فرمت شامل میلی‌ثانیه اصلاح شده است.
-        """
         if not date_str:
             return None
         try:
-            # بخش میلی‌ثانیه را جدا می‌کنیم تا سازگاری کامل شود
             clean_str = date_str.split('.')[0].replace('T', ' ')
-            # فرمت تاریخ را به شکل YYYY-MM-DD HH:MM:SS در می‌آوریم
             naive_dt = datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
-            # آن را به منطقه زمانی UTC تبدیل می‌کنیم
             return pytz.utc.localize(naive_dt)
         except (ValueError, TypeError) as e:
             logger.warning(f"Marzban: Could not parse datetime string '{date_str}': {e}")
             return None
-
+        
+    # --- THIS FUNCTION MUST EXIST ---
     def get_user_info(self, uuid: str) -> dict | None:
+        """Gets a single user's details from Marzban by their Hiddify UUID."""
         if not self.access_token:
             return None
-        marzban_username = self.uuid_map.get(uuid, uuid)
-        try:
-            url = f"{self.base_url}/api/user/{marzban_username}"
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            if response.status_code == 404:
-                logger.warning(f"Marzban: User '{marzban_username}' (from UUID {uuid}) not found.")
-                return None
-            response.raise_for_status()
-            data = response.json()
-            
-            usage_gb = data.get('used_traffic', 0) / (1024 ** 3)
-            limit_gb = data.get('data_limit', 0) / (1024 ** 3)
-            
-            return {
-                "current_usage_GB": usage_gb,
-                "usage_limit_GB": limit_gb,
-                "is_active": data.get('status') == 'active',
-                # --- شروع تغییر ---
-                "last_online": self._parse_marzban_datetime(data.get('online_at'))
-                # --- پایان تغییر ---
-            }
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Marzban: Failed to get user info for {marzban_username}: {e}")
-            if "Token has expired" in str(e):
-                self.access_token = self._get_access_token()
-                return self.get_user_info(uuid)
-            return None
+        
+        # Find the Marzban username from the Hiddify UUID
+        marzban_username = self.uuid_map.get(uuid)
+        if not marzban_username:
+            return None # If no mapping exists, the user is not in Marzban
+
+        # Reuse the get_user_by_username logic
+        return self.get_user_by_username(marzban_username)
 
     def get_all_users(self) -> list[dict]:
-        """Fetches a list of all users from the Marzban panel."""
+        """
+        Fetches all users from the Marzban panel and enriches them with a reliable
+        database ID for use in bot keyboards.
+        """
         if not self.access_token:
             return []
         try:
@@ -106,39 +151,70 @@ class MarzbanAPIHandler:
             response.raise_for_status()
             users_data = response.json().get("users", [])
             
+            # Get a map of all UUIDs to their bot database IDs for quick lookup
+            uuid_to_id_map = {item['uuid']: item['id'] for item in db.all_active_uuids()}
+            
             all_users = []
             for user in users_data:
                 username = user.get("username")
-                uuid = self.username_to_uuid_map.get(username, "") # Find UUID from username
+                # 1. Find the corresponding Hiddify UUID from the mapping file
+                hiddify_uuid = self.username_to_uuid_map.get(username)
                 
-                usage_gb = user.get('used_traffic', 0) / (1024 ** 3)
-                limit_gb = user.get('data_limit', 0) / (1024 ** 3)
-                
-                expire_timestamp = user.get('expire')
-                expire_days = None
-                if expire_timestamp and expire_timestamp > 0:
-                    try:
-                        expire_datetime = datetime.fromtimestamp(expire_timestamp, tz=self.utc_tz)
-                        expire_days = (expire_datetime - datetime.now(self.utc_tz)).days
-                    except (ValueError, TypeError):
-                        expire_days = None
+                # 2. Use the Hiddify UUID to find the internal database ID
+                # This ID is short, reliable, and perfect for callback_data
+                db_id = uuid_to_id_map.get(hiddify_uuid) if hiddify_uuid else None
+
+                # 3. Use the Hiddify UUID if it exists, otherwise fall back to the Marzban username
+                # This identifier is used for fetching detailed info later
+                identifier = hiddify_uuid or username
 
                 all_users.append({
                     "name": username,
-                    "uuid": uuid,
-                    "is_active": user.get('status') == 'active',
-                    "last_online": self._parse_marzban_datetime(user.get('online_at')),
-                    "usage_limit_GB": limit_gb,
-                    "current_usage_GB": usage_gb,
-                    "remaining_GB": max(0, limit_gb - usage_gb),
-                    "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
-                    "expire": expire_days,
-                    "created_at": self._parse_marzban_datetime(user.get('created_at'))
+                    "uuid": identifier,  # The identifier for API calls
+                    "db_id": db_id      # The reliable ID for buttons
                 })
+                
             return all_users
         except requests.exceptions.RequestException as e:
             logger.error(f"Marzban: Failed to get all users: {e}")
             return []
+        
+    def get_user_by_username(self, username: str) -> dict | None:
+        """Gets a single user's details from Marzban by their username."""
+        if not self.access_token:
+            return None
+        try:
+            url = f"{self.base_url}/api/user/{username}"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            user = response.json()
+            
+            uuid = self.username_to_uuid_map.get(username, username)
+            usage_gb = user.get('used_traffic', 0) / (1024 ** 3)
+            limit_gb = user.get('data_limit', 0) / (1024 ** 3)
+            expire_timestamp = user.get('expire')
+            expire_days = None
+            if expire_timestamp and expire_timestamp > 0:
+                expire_datetime = datetime.fromtimestamp(expire_timestamp, tz=self.utc_tz)
+                expire_days = (expire_datetime - datetime.now(self.utc_tz)).days
+
+            return {
+                "name": username,
+                "uuid": uuid,
+                "is_active": user.get('status') == 'active',
+                "last_online": self._parse_marzban_datetime(user.get('online_at')),
+                "usage_limit_GB": limit_gb,
+                "current_usage_GB": usage_gb,
+                "remaining_GB": max(0, limit_gb - usage_gb),
+                "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
+                "expire": expire_days,
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban: Failed to get user by username '{username}': {e}")
+            return None
 
     def get_system_stats(self) -> dict | None:
             """اطلاعات و آمار کلی سیستم را از پنل مرزبان دریافت می‌کند."""
