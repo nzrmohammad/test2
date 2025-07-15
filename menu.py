@@ -215,14 +215,13 @@ class Menu:
         kb.add(types.InlineKeyboardButton("🔙 لغو عملیات", callback_data=back_callback))
         return kb
 
-    def admin_edit_user_menu(self, identifier_for_back_button: str) -> types.InlineKeyboardMarkup:
+    def admin_edit_user_menu(self, db_id: int, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
-        # Using shortened prefixes
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data="ad_act_addgb"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data="ad_act_adddays")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"ad_act_addgb_{panel}_{db_id}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"ad_act_adddays_{panel}_{db_id}")
         )
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"ad_sr_{identifier_for_back_button}"))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"ad_sr_{panel}_{db_id}"))
         return kb
     
     def quick_stats_menu(self, num_accounts: int, current_page: int) -> types.InlineKeyboardMarkup:

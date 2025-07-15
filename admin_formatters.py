@@ -336,3 +336,68 @@ def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
 
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
+
+def fmt_admin_user_summary(info: dict) -> str:
+    """Formats a user summary for the admin with the user's desired layout."""
+    if not info:
+        return "❌ خطا در دریافت اطلاعات کاربر."
+
+    name = escape_markdown(info.get("name", "کاربر ناشناس"))
+    uuid = escape_markdown(info.get("uuid", "N/A"))
+    status_emoji = "🟢" if info.get("is_active") else "🔴"
+    status_text = escape_markdown(f"وضعیت : {status_emoji} فعال" if info.get("is_active") else f"وضعیت : {status_emoji} غیرفعال")
+
+    # Expire date
+    expire_days = info.get("expire")
+    expire_label = "نامحدود"
+    if expire_days is not None:
+        expire_label = f"{expire_days} روز باقیمانده" if expire_days >= 0 else "منقضی شده"
+    expire_text = escape_markdown(f"انقضا : {expire_label}")
+
+    # Bot user info
+    bot_user = db.get_bot_user_by_uuid(info.get('uuid', ''))
+    tg_user_text = ""
+    if bot_user and bot_user.get('user_id'):
+        user_id = bot_user['user_id']
+        first_name = escape_markdown(bot_user.get('first_name', 'کاربر'))
+        tg_user_text = f"👤 کاربر ربات : [{first_name}](tg://user?id={user_id})"
+
+    # Server breakdown
+    h_info = info.get('breakdown', {}).get('hiddify', {})
+    m_info = info.get('breakdown', {}).get('marzban', {})
+    h_usage = f"{h_info.get('usage', 0):.2f}"
+    h_limit = f"{h_info.get('limit', 0):.2f}"
+    m_usage = f"{m_info.get('usage', 0):.2f}"
+    m_limit = f"{m_info.get('limit', 0):.2f}"
+    
+    breakdown_lines = []
+    if h_info:
+        breakdown_lines.append(f"🇩🇪 آلمان: `{h_usage} / {h_limit} GB`")
+    if m_info:
+        breakdown_lines.append(f"🇫🇷 فرانسه: `{m_usage} / {m_limit} GB`")
+    breakdown_str = "\n".join(breakdown_lines)
+
+    # Totals
+    total_usage_gb = info.get('current_usage_GB', 0)
+    total_limit_gb = info.get('usage_limit_GB', 0)
+    
+    separator = escape_markdown("------------------------------------")
+
+    # Building the final report string
+    report_parts = [
+        f"*خلاصه وضعیت کاربر : {name}*\n",
+        status_text,
+        expire_text,
+    ]
+    if tg_user_text:
+        report_parts.append(tg_user_text)
+    
+    report_parts.extend([
+        "\n*مصرف تفکیکی :*",
+        breakdown_str,
+        separator,
+        f"*کل:* `{total_usage_gb:.2f} / {total_limit_gb:.2f} GB`",
+        f"*شناسه یکتا :* `{uuid}`"
+    ])
+    
+    return "\n".join(report_parts)
