@@ -154,30 +154,30 @@ class Menu:
         return kb
 
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
-        """Shows the main management menu for a user."""
+        """Shows the main management menu for a user with shortened callbacks."""
         kb = types.InlineKeyboardMarkup(row_width=2)
-        
         status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
-        # The identifier is safe here because it's only one level deep
-        kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin_toggle_{panel}_{identifier}"))
-        kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin_reset_bday_{panel}_{identifier}"))
-        kb.add(
-            types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin_reset_usage_{panel}_{identifier}"),
-            types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin_delete_{panel}_{identifier}")
-        )
-        # This button will now trigger storing the context
-        kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin_show_edit_menu_{panel}_{identifier}"))
         
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin_manage_panel_{panel}"))
+        # --- START OF FIX: Shortened callback prefixes ---
+        kb.add(types.InlineKeyboardButton(status_text, callback_data=f"ad_tgl_{panel}_{identifier}"))
+        kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"ad_bday_{panel}_{identifier}"))
+        kb.add(
+            types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"ad_rst_{panel}_{identifier}"),
+            types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"ad_del_{panel}_{identifier}")
+        )
+        kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"ad_edt_{panel}_{identifier}"))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"ad_mp_{panel}"))
+        # --- END OF FIX ---
         return kb
-
 
     def confirm_delete(self, uuid: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
+        # --- START OF FIX: Shortened callback prefixes ---
         kb.add(
-            types.InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"admin_confirm_delete_{uuid}"),
-            types.InlineKeyboardButton("❌ خیر، لغو", callback_data=f"admin_cancel_delete_{uuid}")
+            types.InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"ad_cdel_{uuid}"),
+            types.InlineKeyboardButton("❌ خیر، لغو", callback_data=f"ad_nodel_{uuid}")
         )
+        # --- END OF FIX ---
         return kb
 
     def admin_analytics_menu(self, panel: str) -> types.InlineKeyboardMarkup:
@@ -216,15 +216,13 @@ class Menu:
         return kb
 
     def admin_edit_user_menu(self, identifier_for_back_button: str) -> types.InlineKeyboardMarkup:
-        """Shows the edit action choices. Callbacks are now simple."""
         kb = types.InlineKeyboardMarkup(row_width=2)
-        # Callbacks no longer contain panel or identifier
+        # Using shortened prefixes
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data="admin_action_addgb"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data="admin_action_adddays")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data="ad_act_addgb"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data="ad_act_adddays")
         )
-        # The back button still needs the identifier to return to the correct user screen
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin_search_result_{identifier_for_back_button}"))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"ad_sr_{identifier_for_back_button}"))
         return kb
     
     def quick_stats_menu(self, num_accounts: int, current_page: int) -> types.InlineKeyboardMarkup:

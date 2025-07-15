@@ -65,7 +65,7 @@ def create_progress_bar(percent: float, length: int = 15) -> str:
     
     escaped_percent = escape_markdown(f"{percent:.1f}")
 
-    return f"{color} `[{filled_bar}{empty_bar}] {escaped_percent}%`"
+    return f"{color} `{filled_bar}{empty_bar} {escaped_percent}%`"
 
 def persian_date(dt: Optional[datetime]) -> str:
     """
