@@ -9,7 +9,6 @@ import pytz
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    # --- تابع __init__ که گم شده بود، به اینجا اضافه شد ---
     def __init__(self, path: str = "bot_data.db"):
         self.path = path
         self._init_db()
@@ -23,71 +22,69 @@ class DatabaseManager:
 
     def _init_db(self) -> None:
         with self._conn() as c:
-            # --- این بخش برای جلوگیری از خطا، به صورت امن نوشته شده است ---
             try:
                 c.execute("ALTER TABLE users ADD COLUMN data_warning_hiddify INTEGER DEFAULT 1;")
                 logger.info("Column 'data_warning_hiddify' added to 'users' table.")
             except sqlite3.OperationalError:
-                pass  # ستون از قبل وجود دارد
+                pass
 
             try:
                 c.execute("ALTER TABLE users ADD COLUMN data_warning_marzban INTEGER DEFAULT 1;")
                 logger.info("Column 'data_warning_marzban' added to 'users' table.")
             except sqlite3.OperationalError:
-                pass # ستون از قبل وجود دارد
-            # --- پایان بخش امن ---
+                pass
 
             c.executescript("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    username TEXT,
-    first_name TEXT,
-    birthday DATE,
-    last_name TEXT,
-    daily_reports INTEGER DEFAULT 1,
-    expiry_warnings INTEGER DEFAULT 1,
-    data_warning_hiddify INTEGER DEFAULT 1,
-    data_warning_marzban INTEGER DEFAULT 1
-);
-CREATE TABLE IF NOT EXISTS user_uuids (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    uuid TEXT UNIQUE,
-    name TEXT,
-    is_active INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS usage_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid_id INTEGER,
-    hiddify_usage_gb REAL DEFAULT 0,
-    marzban_usage_gb REAL DEFAULT 0,
-    taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(uuid_id) REFERENCES user_uuids(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS scheduled_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_type TEXT NOT NULL,
-    chat_id INTEGER NOT NULL,
-    message_id INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(job_type, chat_id)
-);
-CREATE TABLE IF NOT EXISTS warning_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid_id INTEGER NOT NULL,
-    warning_type TEXT NOT NULL, -- e.g., 'expiry', 'low_data_hiddify'
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(uuid_id, warning_type)
-);
-    CREATE INDEX IF NOT EXISTS idx_user_uuids_uuid ON user_uuids(uuid);
-    CREATE INDEX IF NOT EXISTS idx_user_uuids_user_id ON user_uuids(user_id);
-    CREATE INDEX IF NOT EXISTS idx_snapshots_uuid_id_taken_at ON usage_snapshots(uuid_id, taken_at);
-    CREATE INDEX IF NOT EXISTS idx_scheduled_messages_job_type ON scheduled_messages(job_type);
-    CREATE INDEX IF NOT EXISTS idx_warning_log_uuid_type ON warning_log(uuid_id, warning_type);
-""")
+                                CREATE TABLE IF NOT EXISTS users (
+                                    user_id INTEGER PRIMARY KEY,
+                                    username TEXT,
+                                    first_name TEXT,
+                                    birthday DATE,
+                                    last_name TEXT,
+                                    daily_reports INTEGER DEFAULT 1,
+                                    expiry_warnings INTEGER DEFAULT 1,
+                                    data_warning_hiddify INTEGER DEFAULT 1,
+                                    data_warning_marzban INTEGER DEFAULT 1
+                                );
+                                CREATE TABLE IF NOT EXISTS user_uuids (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    user_id INTEGER,
+                                    uuid TEXT UNIQUE,
+                                    name TEXT,
+                                    is_active INTEGER DEFAULT 1,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at TIMESTAMP,
+                                    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                                );
+                                CREATE TABLE IF NOT EXISTS usage_snapshots (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    uuid_id INTEGER,
+                                    hiddify_usage_gb REAL DEFAULT 0,
+                                    marzban_usage_gb REAL DEFAULT 0,
+                                    taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    FOREIGN KEY(uuid_id) REFERENCES user_uuids(id) ON DELETE CASCADE
+                                );
+                                CREATE TABLE IF NOT EXISTS scheduled_messages (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    job_type TEXT NOT NULL,
+                                    chat_id INTEGER NOT NULL,
+                                    message_id INTEGER NOT NULL,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    UNIQUE(job_type, chat_id)
+                                );
+                                CREATE TABLE IF NOT EXISTS warning_log (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    uuid_id INTEGER NOT NULL,
+                                    warning_type TEXT NOT NULL, -- e.g., 'expiry', 'low_data_hiddify'
+                                    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    UNIQUE(uuid_id, warning_type)
+                                );
+                                    CREATE INDEX IF NOT EXISTS idx_user_uuids_uuid ON user_uuids(uuid);
+                                    CREATE INDEX IF NOT EXISTS idx_user_uuids_user_id ON user_uuids(user_id);
+                                    CREATE INDEX IF NOT EXISTS idx_snapshots_uuid_id_taken_at ON usage_snapshots(uuid_id, taken_at);
+                                    CREATE INDEX IF NOT EXISTS idx_scheduled_messages_job_type ON scheduled_messages(job_type);
+                                    CREATE INDEX IF NOT EXISTS idx_warning_log_uuid_type ON warning_log(uuid_id, warning_type);
+                            """)
         logger.info("SQLite schema and indexes are ready.")
 
     def add_usage_snapshot(self, uuid_id: int, hiddify_usage: float, marzban_usage: float) -> None:
@@ -101,29 +98,26 @@ CREATE TABLE IF NOT EXISTS warning_log (
         tehran_tz = pytz.timezone("Asia/Tehran")
         today_midnight_tehran = datetime.now(tehran_tz).replace(hour=0, minute=0, second=0, microsecond=0)
         today_midnight_utc = today_midnight_tehran.astimezone(pytz.utc)
-        
-        result = {'hiddify': 0.0, 'marzban': 0.0}
-        
-        with self._conn() as c:
-            query_h = """
-                SELECT
-                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as start_usage,
-                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as end_usage
-            """
-            params = (uuid_id, today_midnight_utc, uuid_id, today_midnight_utc)
-            row_h = c.execute(query_h, params).fetchone()
-            if row_h and row_h['start_usage'] is not None and row_h['end_usage'] is not None:
-                result['hiddify'] = max(0, row_h['end_usage'] - row_h['start_usage'])
 
-            query_m = """
+        result = {'hiddify': 0.0, 'marzban': 0.0}
+
+        with self._conn() as c:
+            query = """
                 SELECT
-                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as start_usage,
-                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as end_usage
+                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as h_end,
+                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as h_start,
+                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as m_end,
+                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as m_start
             """
-            row_m = c.execute(query_m, params).fetchone()
-            if row_m and row_m['start_usage'] is not None and row_m['end_usage'] is not None:
-                result['marzban'] = max(0, row_m['end_usage'] - row_m['start_usage'])
-                
+            params = (uuid_id, today_midnight_utc) * 4
+            row = c.execute(query, params).fetchone()
+
+            if row:
+                if row['h_start'] is not None and row['h_end'] is not None:
+                    result['hiddify'] = max(0, row['h_end'] - row['h_start'])
+                if row['m_start'] is not None and row['m_end'] is not None:
+                    result['marzban'] = max(0, row['m_end'] - row['m_start'])
+
         return result
     
     def get_panel_usage_in_intervals(self, uuid_id: int, panel_name: str) -> Dict[int, float]:

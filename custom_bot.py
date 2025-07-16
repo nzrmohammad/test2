@@ -7,7 +7,7 @@ from telebot import TeleBot
 from utils import initialize_utils
 from config import LOG_LEVEL, LOG_FORMAT, ADMIN_IDS, BOT_TOKEN
 from database import db
-from api_handler import api_handler
+from api_handler2 import api_handler
 
 from scheduler import SchedulerManager
 

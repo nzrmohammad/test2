@@ -2,7 +2,7 @@ import pytz
 from datetime import datetime, timedelta
 from config import EMOJIS, PAGE_SIZE
 from database import db
-from api_handler import api_handler
+from api_handler2 import api_handler
 import jdatetime
 from utils import (
     persian_date,
@@ -150,7 +150,7 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
             daily_dict = user.get('daily_usage_dict', {})
             h_daily_str = escape_markdown(format_daily_usage(daily_dict.get('hiddify', 0.0)))
             m_daily_str = escape_markdown(format_daily_usage(daily_dict.get('marzban', 0.0)))
-            report_lines.append(f"`•` *{user_name}:* 🇩🇪`{h_daily_str}` | 🇫🇷`{m_daily_str}`")
+            report_lines.append(f"`•` *{user_name}:* 🇩🇪`{h_daily_str}` \\| 🇫🇷`{m_daily_str}`")
 
     if expiring_soon_users:
         report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['warning']} {escape_markdown('کاربرانی که به زودی منقضی می‌شوند (تا ۳ روز):')}*")
@@ -200,7 +200,7 @@ def fmt_top_consumers(users: list, page: int) -> str:
         usage = user.get('current_usage_GB', 0)
         limit = user.get('usage_limit_GB', 0)
         usage_str = f"`{usage:.2f} GB / {limit:.2f} GB`"
-        line = f"`{i}.` *{name}* `|` {EMOJIS['chart']} {usage_str}"
+        line = f"`{i}\\.` *{name}* `\\|` {EMOJIS['chart']} {usage_str}"
         lines.append(line)
 
     return "\n".join(lines)
@@ -254,12 +254,12 @@ def fmt_birthdays_list(users: list, page: int) -> str:
         shamsi_str = shamsi_date.strftime('%Y/%m/%d')
         gregorian_str = gregorian_date.strftime('%Y-%m-%d')
         
-        lines.append(f"`•` *{name}* `|` solar: `{shamsi_str}` `|` gregorian: `{gregorian_str}`")
+        lines.append(f"`•` *{name}* `\\|` solar: `{shamsi_str}` `\\|` gregorian: `{gregorian_str}`")
+
         
     return "\n".join(lines)
 
 def fmt_marzban_system_stats(info: dict) -> str:
-    """Formats the Marzban panel system status information with all details."""
     if not info:
         return escape_markdown("اطلاعاتی از سیستم دریافت نشد\\.")
 
@@ -292,7 +292,7 @@ def fmt_marzban_system_stats(info: dict) -> str:
         f"------------------------------------\n"
         f"⚙️ نسخه: {version}\n"
         f"🖥️ هسته CPU: {cpu_cores} | مصرف: {cpu_usage:.1f}%\n"
-        f"💾 مصرف RAM: {mem_used_gb:.2f} / {mem_total_gb:.2f} GB ({mem_percent:.1f}%)\n"
+        f"💾 مصرف RAM: {mem_used_gb:.2f} / {mem_total_gb:.2f} GB \\({mem_percent:.1f}%\\)"
         f"------------------------------------\n"
         f"👥 کاربران کل: {total_users}\n"
         f"🟢 فعال: {active_users}\n"
@@ -338,73 +338,109 @@ def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
 
+# در فایل admin_formatters.py این تابع را به طور کامل جایگزین کنید
+
+# این تابع را در فایل admin_formatters.py به طور کامل جایگزین کنید
 def fmt_admin_user_summary(info: dict) -> str:
-    """Formats a user summary for the admin with the user's desired layout."""
+    """Formats a user summary for the admin, ensuring all values are properly escaped for MarkdownV2."""
     if not info:
-        return "❌ خطا در دریافت اطلاعات کاربر."
+        return "❌ خطا در دریافت اطلاعات کاربر\\."
 
     name = escape_markdown(info.get("name", "کاربر ناشناس"))
-    # Use the primary identifier, which could be UUID or username
-    identifier = escape_markdown(info.get("uuid") or info.get("name", "N/A"))
-    
-    # Determine the correct label for the identifier
-    is_uuid = validate_uuid(info.get("uuid", ""))
-    identifier_label = "شناسه یکتا" if is_uuid else "نام کاربری"
-
     status_emoji = "🟢" if info.get("is_active") else "🔴"
-    status_text = escape_markdown(f"وضعیت : {status_emoji} فعال" if info.get("is_active") else f"وضعیت : {status_emoji} غیرفعال")
+    status_text = "فعال" if info.get("is_active") else "غیرفعال"
+    name_line = f"👤 نام : {name} \\({status_emoji} {status_text}\\)"
 
-    # Expire date
+    total_limit_gb = info.get('usage_limit_GB', 0)
+    total_usage_gb = info.get('current_usage_GB', 0)
+    total_remaining_gb = total_limit_gb - total_usage_gb if total_limit_gb > 0 else 0
+    daily_usage_total = info.get('daily_usage_GB', 0)
+    
+    total_limit_str = escape_markdown(f"{total_limit_gb:.2f}")
+    total_usage_str = escape_markdown(f"{total_usage_gb:.2f}")
+    total_remaining_str = escape_markdown(f"{total_remaining_gb:.2f}")
+    total_daily_str = escape_markdown(format_daily_usage(daily_usage_total))
+
+    total_usage_line = f"🗂️ مجموع حجم : `{total_limit_str} GB`"
+    total_consumed_line = f"🔥 مجموع مصرف شده : `{total_usage_str} GB`"
+    total_remaining_line = f"📥 مجموع باقیمانده: `{total_remaining_str} GB`"
+    total_daily_line = f"⚡️ مجموع مصرف امروز: `{total_daily_str}`"
+
+    breakdown_lines = ["\n*جزئیات سرورها*"]
+    h_info = info.get('breakdown', {}).get('hiddify', {})
+    m_info = info.get('breakdown', {}).get('marzban', {})
+
+    if h_info:
+        h_limit_str = escape_markdown(f"{h_info.get('limit', 0):.2f}")
+        h_usage_str = escape_markdown(f"{h_info.get('usage', 0):.2f}")
+        h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0)))
+        h_last_online_str = format_shamsi_tehran(h_info.get('last_online'))
+        
+        # FIX: The missing comma after this line is now added.
+        breakdown_lines.extend([
+            "\nآلمان 🇩🇪",
+            f"🗂️ مجموع حجم : `{h_limit_str} GB`",
+            f"🔥 مجموع مصرف شده : `{h_usage_str} GB`",
+            f"⚡️ مصرف امروز : `{h_daily_str}`",  # ویرگول فراموش شده در اینجا اضافه شد
+            f"⏰ آخرین اتصال : `{h_last_online_str}`"
+        ])
+
+    if m_info:
+        m_limit_str = escape_markdown(f"{m_info.get('limit', 0):.2f}")
+        m_usage_str = escape_markdown(f"{m_info.get('usage', 0):.2f}")
+        m_daily_str = escape_markdown(format_daily_usage(m_info.get('daily_usage', 0)))
+        m_last_online_str = format_shamsi_tehran(m_info.get('last_online'))
+        
+        breakdown_lines.extend([
+            "\nفرانسه 🇫🇷",
+            f"🗂️ مجموع حجم : `{m_limit_str} GB`",
+            f"🔥 مجموع مصرف شده : `{m_usage_str} GB`",
+            f"⚡️ مصرف امروز : `{m_daily_str}`",
+            f"⏰ آخرین اتصال : `{m_last_online_str}`"
+        ])
+
     expire_days = info.get("expire")
     expire_label = "نامحدود"
     if expire_days is not None:
-        expire_label = f"{expire_days} روز باقیمانده" if expire_days >= 0 else "منقضی شده"
-    expire_text = escape_markdown(f"انقضا : {expire_label}")
-
-    # Bot user info
-    bot_user = db.get_bot_user_by_uuid(info.get('uuid', ''))
-    tg_user_text = ""
-    if bot_user and bot_user.get('user_id'):
-        user_id = bot_user['user_id']
-        first_name = escape_markdown(bot_user.get('first_name', 'کاربر'))
-        tg_user_text = f"👤 کاربر ربات : [{first_name}](tg://user?id={user_id})"
-
-    # Server breakdown
-    h_info = info.get('breakdown', {}).get('hiddify', {})
-    m_info = info.get('breakdown', {}).get('marzban', {})
-    h_usage = f"{h_info.get('usage', 0):.2f}"
-    h_limit = f"{h_info.get('limit', 0):.2f}"
-    m_usage = f"{m_info.get('usage', 0):.2f}"
-    m_limit = f"{m_info.get('limit', 0):.2f}"
+        expire_label = f"{expire_days} روز" if expire_days >= 0 else "منقضی شده"
+    expire_line = f"📅 انقضا: {escape_markdown(expire_label)}"
     
-    breakdown_lines = []
-    if h_info:
-        breakdown_lines.append(f"🇩🇪 آلمان: `{h_usage} / {h_limit} GB`")
-    if m_info:
-        breakdown_lines.append(f"🇫🇷 فرانسه: `{m_usage} / {m_limit} GB`")
-    breakdown_str = "\n".join(breakdown_lines)
+    identifier = escape_markdown(info.get("uuid") or info.get("name", "N/A"))
+    uuid_line = f"🔑 شناسه یکتا: `{identifier}`"
 
-    # Totals
-    total_usage_gb = info.get('current_usage_GB', 0)
-    total_limit_gb = info.get('usage_limit_GB', 0)
+    usage_percentage = info.get('usage_percentage', 0)
+    progress_bar = '░' * 15
+    filled_count = int(usage_percentage / 100 * 15)
+    if filled_count > 0:
+        progress_bar = '▓' * filled_count + '░' * (15 - filled_count)
     
-    separator = escape_markdown("------------------------------------")
-
-    # Building the final report string
+    usage_percentage_str = escape_markdown(f"{usage_percentage:.1f}")
+    status_bar_line = f"وضعیت : {status_emoji} {progress_bar} {usage_percentage_str}%"
+    
     report_parts = [
-        f"*خلاصه وضعیت کاربر : {name}*\n",
-        status_text,
-        expire_text,
+        name_line, "",
+        total_usage_line, total_consumed_line, total_remaining_line, total_daily_line,
+        *breakdown_lines, "",
+        expire_line, uuid_line, "",
+        status_bar_line
     ]
-    if tg_user_text:
-        report_parts.append(tg_user_text)
-    
-    report_parts.extend([
-        "\n*مصرف تفکیکی :*",
-        breakdown_str,
-        separator,
-        f"*کل:* `{total_usage_gb:.2f} / {total_limit_gb:.2f} GB`",
-        f"*{identifier_label} :* `{identifier}`"
-    ])
-    
+
     return "\n".join(report_parts)
+
+
+
+
+def format_shamsi_tehran(dt_obj):
+
+    if not dt_obj:
+        return "N/A"
+    
+    if dt_obj.tzinfo is None:
+        dt_obj = pytz.utc.localize(dt_obj)
+
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    tehran_dt = dt_obj.astimezone(tehran_tz)
+    
+    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
+    
+    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"

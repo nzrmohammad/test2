@@ -1,52 +1,60 @@
 from telebot import types
 from menu import menu
 from marzban_api_handler import marzban_handler
-from utils import _safe_edit
+from utils import _safe_edit, escape_markdown
+import logging
 
+logger = logging.getLogger(__name__)
 bot = None
 admin_conversations = {}
 
 def initialize_marzban_handlers(b_instance, conversations_dict):
-    """Initializes necessary variables from the main router."""
     global bot, admin_conversations
     bot = b_instance
     admin_conversations = conversations_dict
 
-# --- START: ADD NEW CONVERSATION FLOW for Marzban ---
+def _delete_user_message(msg: types.Message):
+    try:
+        bot.delete_message(msg.chat.id, msg.message_id)
+    except Exception as e:
+        logger.warning(f"Could not delete user message {msg.message_id}: {e}")
+
 def _start_add_marzban_user_convo(uid, msg_id):
     admin_conversations[uid] = {'msg_id': msg_id, 'panel': 'marzban'}
-    # --- START OF FIX ---
-    prompt = "افزودن کاربر به پنل فرانسه \\(مرزبان\\) 🇫🇷\n\n1. لطفاً یک **نام کاربری** وارد کنید \\(حروف انگلیسی، اعداد و آندرلاین\\):"
-    # --- END OF FIX ---
+    prompt = "افزودن کاربر به پنل فرانسه \\(مرزبان\\) 🇫🇷\n\n1\\. لطفاً یک **نام کاربری** وارد کنید \\(حروف انگلیسی، اعداد و آندرلاین\\):"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
     bot.register_next_step_handler_by_chat_id(uid, _get_name_for_add_marzban_user)
 
 def _get_name_for_add_marzban_user(msg: types.Message):
     uid, name = msg.from_user.id, msg.text.strip()
+    _delete_user_message(msg)
+    if uid not in admin_conversations: return
     if name.startswith('/'):
         bot.clear_step_handler_by_chat_id(uid)
-        bot.send_message(uid, "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'), parse_mode="MarkdownV2")
+        _safe_edit(uid, admin_conversations[uid]['msg_id'], "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'))
         return
-        
     msg_id = admin_conversations[uid].get('msg_id')
     admin_conversations[uid]['username'] = name
-    prompt = f"نام کاربری: `{name}`\n\n2. حالا **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
+    prompt = f"نام کاربری: `{escape_markdown(name)}`\n\n2\\. حالا **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
     bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_marzban_user)
 
 def _get_limit_for_add_marzban_user(msg: types.Message):
     uid, limit_text = msg.from_user.id, msg.text.strip()
+    _delete_user_message(msg)
+    if uid not in admin_conversations: return
     if limit_text.startswith('/'):
         bot.clear_step_handler_by_chat_id(uid)
-        bot.send_message(uid, "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'), parse_mode="MarkdownV2")
+        _safe_edit(uid, admin_conversations[uid]['msg_id'], "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'))
         return
-
     msg_id = admin_conversations[uid].get('msg_id')
     try:
         limit = float(limit_text)
         admin_conversations[uid]['usage_limit_GB'] = limit
         name = admin_conversations[uid]['username']
-        prompt = f"نام کاربری: `{name}`, حجم: `{limit} GB`\n\n3. در نهایت، **مدت زمان** پلن \\(به روز\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
+        # FINAL FIX: Escape the float value before displaying it
+        limit_str = escape_markdown(f"{limit:.1f}")
+        prompt = f"نام کاربری: `{escape_markdown(name)}`, حجم: `{limit_str} GB`\n\n3\\. در نهایت، **مدت زمان** پلن \\(به روز\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_marzban_user)
     except (ValueError, TypeError):
@@ -55,11 +63,12 @@ def _get_limit_for_add_marzban_user(msg: types.Message):
 
 def _get_days_for_add_marzban_user(msg: types.Message):
     uid, days_text = msg.from_user.id, msg.text.strip()
+    _delete_user_message(msg)
+    if uid not in admin_conversations: return
     if days_text.startswith('/'):
         bot.clear_step_handler_by_chat_id(uid)
-        bot.send_message(uid, "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'), parse_mode="MarkdownV2")
+        _safe_edit(uid, admin_conversations[uid]['msg_id'], "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'))
         return
-
     msg_id = admin_conversations[uid].get('msg_id')
     try:
         days = int(days_text)
@@ -70,13 +79,17 @@ def _get_days_for_add_marzban_user(msg: types.Message):
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_marzban_user)
 
 def _finish_marzban_user_creation(uid, msg_id):
+    if uid not in admin_conversations:
+        _safe_edit(uid, msg_id, "⚠️ عملیات به دلیل وقفه در ربات لغو شد. لطفاً دوباره شروع کنید.", reply_markup=menu.admin_panel_management_menu('marzban'))
+        return
     user_data = admin_conversations.pop(uid)
-    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\n> نام کاربری: `{user_data['username']}`"
+    username_escaped = escape_markdown(user_data.get('username', ''))
+    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\n\\> نام کاربری: `{username_escaped}`"
     _safe_edit(uid, msg_id, wait_msg)
-
     new_user_info = marzban_handler.add_user(user_data)
     if new_user_info and new_user_info.get('username'):
-        success_text = f"✅ کاربر `{new_user_info['username']}` با موفقیت در پنل فرانسه ساخته شد."
+        username_created = escape_markdown(new_user_info['username'])
+        success_text = f"✅ کاربر `{username_created}` با موفقیت در پنل فرانسه ساخته شد\\."
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('marzban'))
     else:
         err_msg = "❌ خطا در ساخت کاربر. ممکن است نام تکراری باشد یا پنل در دسترس نباشد."

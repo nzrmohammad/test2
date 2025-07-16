@@ -1,7 +1,9 @@
+import pytz
 from config import EMOJIS, PAGE_SIZE
 from database import db
-from api_handler import api_handler
+from api_handler2 import api_handler
 import jdatetime
+from datetime import datetime
 from utils import (
     create_progress_bar, persian_date,
     format_daily_usage, escape_markdown,
@@ -10,49 +12,50 @@ from utils import (
 
 def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     """
-    Formats the account information according to the user's final desired structure.
+    اطلاعات اکانت را با تاریخ شمسی و ساعت تهران قالب‌بندی می‌کند.
     """
     if not info:
         return "❌ خطا در دریافت اطلاعات"
     
-    # --- 1. Prepare and escape all variables for the new layout ---
+    # --- ۱. آماده‌سازی متغیرها ---
     name = escape_markdown(info.get("name", "کاربر ناشناس"))
     status_emoji = "🟢" if info.get("is_active") else "🔴"
     status_text = "فعال" if info.get("is_active") else "غیرفعال"
     
-    # Main stats
-    total_limit_gb = escape_markdown(f"{info.get('usage_limit_GB', 0):.2f} GB")
-    total_usage_gb = escape_markdown(f"{info.get('current_usage_GB', 0):.2f} GB")
-    total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f} GB")
+    # آمار کلی
+    total_limit_gb = f"{info.get('usage_limit_GB', 0):.2f} GB"
+    total_usage_gb = f"{info.get('current_usage_GB', 0):.2f} GB"
+    total_remaining_gb = f"{info.get('remaining_GB', 0):.2f} GB"
     total_daily_gb_val = sum(daily_usage_dict.values())
-    total_daily_gb_str = escape_markdown(format_daily_usage(total_daily_gb_val))
+    total_daily_gb_str = format_daily_usage(total_daily_gb_val)
 
-    # Server-specific stats (Germany)
-    h_limit_str = escape_markdown(f"{info.get('breakdown', {}).get('hiddify', {}).get('limit', 0.0):.2f} GB")
-    h_usage_str = escape_markdown(f"{info.get('breakdown', {}).get('hiddify', {}).get('usage', 0.0):.2f} GB")
-    h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
-    h_last_online = escape_markdown(persian_date(info.get('breakdown', {}).get('hiddify', {}).get('last_online')))
+    # آمار سرور آلمان (Hiddify)
+    h_limit_str = f"{info.get('breakdown', {}).get('hiddify', {}).get('limit', 0.0):.2f} GB"
+    h_usage_str = f"{info.get('breakdown', {}).get('hiddify', {}).get('usage', 0.0):.2f} GB"
+    h_daily_str = format_daily_usage(daily_usage_dict.get('hiddify', 0.0))
+    # ---> تغییر اصلی: استفاده از تابع جدید برای فرمت تاریخ و زمان
+    h_last_online = format_shamsi_tehran_datetime(info.get('breakdown', {}).get('hiddify', {}).get('last_online'))
     
-    # Server-specific stats (France)
-    m_limit_str = escape_markdown(f"{info.get('breakdown', {}).get('marzban', {}).get('limit', 0.0):.2f} GB")
-    m_usage_str = escape_markdown(f"{info.get('breakdown', {}).get('marzban', {}).get('usage', 0.0):.2f} GB")
-    m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
-    m_last_online = escape_markdown(persian_date(info.get('breakdown', {}).get('marzban', {}).get('last_online')))
+    # آمار سرور فرانسه (Marzban)
+    m_limit_str = f"{info.get('breakdown', {}).get('marzban', {}).get('limit', 0.0):.2f} GB"
+    m_usage_str = f"{info.get('breakdown', {}).get('marzban', {}).get('usage', 0.0):.2f} GB"
+    m_daily_str = format_daily_usage(daily_usage_dict.get('marzban', 0.0))
+    # ---> تغییر اصلی: استفاده از تابع جدید برای فرمت تاریخ و زمان
+    m_last_online = format_shamsi_tehran_datetime(info.get('breakdown', {}).get('marzban', {}).get('last_online'))
 
-    # Footer stats
+    # آمار پایانی
     expire_days = info.get("expire")
     expire_label = "نامحدود"
     if expire_days is not None:
         expire_label = f"{expire_days} روز"
-    escaped_expire_label = escape_markdown(expire_label)
     
+    escaped_expire_label = escape_markdown(expire_label)
     uuid = escape_markdown(info.get('uuid', ''))
     
-    # Progress bar for the footer
     usage_percentage = info.get("usage_percentage", 0)
     bar = create_progress_bar(usage_percentage) 
 
-    # --- 2. Construct the final report string with the latest changes ---
+    # --- ۲. ساخت گزارش نهایی ---
     report = f"""{EMOJIS['user']} *نام :* {name} \\({status_emoji} {status_text}\\)
 
 {EMOJIS['database']} *مجموع حجم :* `{total_limit_gb}`
@@ -80,6 +83,7 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
 *وضعیت :* {bar}"""
                
     return report
+
 
 def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     # This function is kept for "Quick Stats" button logic, but its format can be updated if needed.
@@ -235,3 +239,28 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
         lines.append(f"`• {hours}` ساعت گذشته: `{escape_markdown(usage_str)}`")
         
     return "\n".join(lines)
+
+
+
+
+def format_shamsi_tehran_datetime(dt_obj: datetime | None) -> str:
+    """
+    یک شیء datetime با منطقه زمانی UTC دریافت کرده و آن را به تاریخ شمسی 
+    و ساعت به وقت تهران تبدیل می‌کند. اگر ورودی معتبر نباشد، 'هرگز' برمی‌گرداند.
+    """
+    if not dt_obj:
+        return "هرگز"
+    
+    # اطمینان از اینکه شیء ورودی دارای منطقه زمانی است (پیش‌فرض UTC)
+    if dt_obj.tzinfo is None:
+        dt_obj = pytz.utc.localize(dt_obj)
+
+    # تبدیل به منطقه زمانی تهران
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    tehran_dt = dt_obj.astimezone(tehran_tz)
+    
+    # تبدیل تاریخ میلادی به شمسی
+    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
+    
+    # قالب‌بندی خروجی به صورت 'YYYY/MM/DD - HH:MM'
+    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"

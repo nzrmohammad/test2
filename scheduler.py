@@ -9,7 +9,7 @@ from config import (DAILY_REPORT_TIME, TEHRAN_TZ, ADMIN_IDS,BIRTHDAY_GIFT_GB, BI
                      WARNING_USAGE_THRESHOLD,WARNING_DAYS_BEFORE_EXPIRY,
                      USAGE_WARNING_CHECK_HOURS, ONLINE_REPORT_UPDATE_HOURS, EMOJIS)
 from database import db
-from api_handler import api_handler
+from api_handler2 import api_handler
 from utils import escape_markdown
 from menu import menu
 from admin_formatters import fmt_admin_report, fmt_online_users_list
