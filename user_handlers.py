@@ -8,11 +8,9 @@ from menu import menu
 from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
 
-
 logger = logging.getLogger(__name__)
-bot = telebot.TeleBot("YOUR_BOT_TOKEN") # Placeholder
+bot = telebot.TeleBot("YOUR_BOT_TOKEN")
 
-# --- Conversation Functions ---
 def _save_first_uuid(message: types.Message):
     uid, uuid_str = message.from_user.id, message.text.strip().lower()
     if not validate_uuid(uuid_str):
@@ -127,9 +125,6 @@ def handle_user_callbacks(call: types.CallbackQuery):
         bot.clear_step_handler_by_chat_id(uid)
         handler(call)
         return
-
-    # --- START OF THE FIX ---
-    # The order and logic of these if/elif statements are now corrected.
     
     if data.startswith("acc_"):
         uuid_id = int(data.split("_")[1])
@@ -179,13 +174,6 @@ def handle_user_callbacks(call: types.CallbackQuery):
         uuid_id = int(data.split("_")[1])
         db.deactivate_uuid(uuid_id)
         _safe_edit(call.from_user.id, call.message.message_id, "🗑 اکانت با موفقیت حذف شد\\.", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
-        
-    elif data.startswith("win_select_"):
-        # Correctly extracts the ID from the end of "win_select_{uuid_id}"
-        uuid_id = int(data.split("_")[2])
-        if db.uuid_by_id(uid, uuid_id):
-            text = "لطفاً سرور مورد نظر خود را برای مشاهده آمار مصرف انتخاب کنید:"
-            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id), parse_mode=None)
 
     elif data.startswith("win_hiddify_") or data.startswith("win_marzban_"):
         parts = data.split("_")
@@ -195,22 +183,26 @@ def handle_user_callbacks(call: types.CallbackQuery):
         if db.uuid_by_id(uid, uuid_id):
             panel_db_name = f"{panel_code}_usage_gb"
             panel_display_name = "آلمان 🇩🇪" if panel_code == "hiddify" else "فرانسه 🇫🇷"
-            
+
             stats = db.get_panel_usage_in_intervals(uuid_id, panel_db_name)
             text = fmt_panel_quick_stats(panel_display_name, stats)
-            
+
             markup = InlineKeyboardMarkup().add(
                 InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data=f"win_select_{uuid_id}")
             )
             _safe_edit(uid, msg_id, text, reply_markup=markup)
+
+    elif data.startswith("win_select_"):
+        uuid_id = int(data.split("_")[2])
+        if db.uuid_by_id(uid, uuid_id):
+            text = "لطفاً سرور مورد نظر خود را برای مشاهده آمار مصرف انتخاب کنید:"
+            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id), parse_mode=None)
             
     elif data.startswith("qstats_acc_page_"):
         page = int(data.split("_")[3])
         text, menu_data = quick_stats(db.uuids(uid), page=page)
         reply_markup = menu.quick_stats_menu(menu_data['num_accounts'], menu_data['current_page'])
         _safe_edit(uid, msg_id, text, reply_markup=reply_markup)
-
-    # --- END OF THE FIX ---
 
 def register_user_handlers(b: telebot.TeleBot):
     """Registers all message handlers for regular users."""

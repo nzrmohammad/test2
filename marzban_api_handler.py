@@ -18,22 +18,18 @@ class MarzbanAPIHandler:
         self.uuid_map = self._load_uuid_map()
         self.utc_tz = pytz.utc
 
-    def _load_uuid_map(self):
-        """Loads the uuid_to_marzban_user.json file and creates both forward and reverse maps."""
-        try:
-            with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
-                # --- START OF FIX ---
-                # Load the data from the file ONCE into a variable
-                data = json.load(f)
-                # Create the reverse map from the loaded data
-                self.username_to_uuid_map = {v: k for k, v in data.items()}
-                # Return the forward map
-                return data
-                # --- END OF FIX ---
-        except (FileNotFoundError, json.JSONDecodeError):
-            logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
-            self.username_to_uuid_map = {}
-            return {}
+# در فایل marzban_api_handler.py
+def _load_uuid_map(self):
+    """Loads the uuid_to_marzban_user.json file and creates both forward and reverse maps."""
+    try:
+        with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            self.username_to_uuid_map = {v: k for k, v in data.items()}
+            return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
+        self.username_to_uuid_map = {}
+        return {}
 
     def _get_access_token(self):
         """Fetches the access token from Marzban panel."""
