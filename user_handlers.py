@@ -3,7 +3,7 @@ from telebot import types, telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS
 from database import db
-from api_handler2 import api_handler
+import combined_handler 
 from menu import menu
 from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
@@ -129,7 +129,7 @@ def handle_user_callbacks(call: types.CallbackQuery):
     if data.startswith("acc_"):
         uuid_id = int(data.split("_")[1])
         row = db.uuid_by_id(uid, uuid_id)
-        if row and (info := api_handler.user_info(row["uuid"])):
+        if row and (info := combined_handler.get_combined_user_info(row["uuid"])):
             daily_usage_data = db.get_usage_since_midnight(uuid_id)
             text = fmt_one(info, daily_usage_data)
             _safe_edit(uid, msg_id, text, reply_markup=menu.account_menu(uuid_id))

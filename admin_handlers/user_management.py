@@ -44,10 +44,9 @@ def _get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
         return h_info
     return None
 
-# FIX: آندرلاین از نام توابع عمومی حذف شد
 def handle_show_user_summary(call, params):
     panel, identifier = params[0], ':'.join(params[1:])
-    info = _get_combined_user_info(identifier)
+    info = combined_handler.get_combined_user_info(identifier)
     if info:
         text = fmt_admin_user_summary(info)
         kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
@@ -154,21 +153,11 @@ def handle_delete_user_action(call, params):
         return
     if action == "confirm":
         _safe_edit(uid, msg_id, "⏳ در حال حذف کامل کاربر...")
-        info = _get_combined_user_info(identifier)
-        if not info:
-            _safe_edit(uid, msg_id, "❌ خطا: کاربر یافت نشد.", reply_markup=menu.admin_management_menu())
-            return
-        h_success, m_success = True, True
-        if 'hiddify' in info.get('breakdown', {}): h_success = api_handler.delete_user(info['uuid'])
-        if 'marzban' in info.get('breakdown', {}): m_success = marzban_handler.delete_user(info['name'])
-        if h_success and m_success:
-            db_id = db.get_uuid_id_by_uuid(identifier)
-            if db_id:
-                db.deactivate_uuid(db_id)
-                db.delete_user_snapshots(db_id)
-            _safe_edit(uid, msg_id, "✅ کاربر با موفقیت حذف شد.", reply_markup=menu.admin_management_menu())
+        success = combined_handler.delete_user_from_all_panels(identifier) # <<-- تغییر کلیدی
+        if success:
+            _safe_edit(uid, msg_id, "✅ کاربر با موفقیت از تمام پنل‌ها و ربات حذف شد.", reply_markup=menu.admin_management_menu())
         else:
-            _safe_edit(uid, msg_id, "❌ خطا در حذف کاربر از یک یا هر دو پنل.", reply_markup=menu.admin_management_menu())
+            _safe_edit(uid, msg_id, "❌ خطا در حذف کاربر.", reply_markup=menu.admin_management_menu())
 
 
 def handle_global_search_convo(call, params):
