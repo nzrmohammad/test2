@@ -94,7 +94,7 @@ def _get_days_for_add_marzban_user(msg: types.Message):
 
 
 def _finish_marzban_user_creation(uid, msg_id):
-    user_data = admin_conversations.get(uid, {}).copy() # Get data before it's popped
+    user_data = admin_conversations.get(uid, {}).copy()
     
     if not user_data:
         _safe_edit(uid, msg_id, "⚠️ عملیات به دلیل وقفه در ربات لغو شد. لطفاً دوباره شروع کنید.", reply_markup=menu.admin_panel_management_menu('marzban'))
@@ -108,6 +108,7 @@ def _finish_marzban_user_creation(uid, msg_id):
     
     if new_user_info and new_user_info.get('username'):
         username_created = escape_markdown(new_user_info['username'])
+        # FIX: Use a simpler, dedicated success message
         success_text = f"✅ کاربر `{username_created}` با موفقیت در پنل فرانسه ساخته شد\\."
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('marzban'))
     else:

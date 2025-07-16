@@ -11,6 +11,7 @@ from utils import safe_float
 logger = logging.getLogger(__name__)
 
 class HiddifyAPIHandler:
+    # ... (init, _create_session, _request, _parse_api_datetime, _calculate_remaining_days remain the same)
     def __init__(self):
         self.base_url = f"{HIDDIFY_DOMAIN.rstrip('/')}/{ADMIN_PROXY_PATH.strip('/')}/api/v2/admin"
         self.api_key = ADMIN_UUID
@@ -38,24 +39,32 @@ class HiddifyAPIHandler:
     def _parse_api_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
         if not date_str or date_str.startswith('0001-01-01'): return None
         try:
-            clean_str = date_str.split('.')[0]
-            return pytz.utc.localize(datetime.fromisoformat(clean_str))
+            # Handle different formats, including those with 'Z' for UTC
+            clean_str = date_str.replace('Z', '+00:00').split('.')[0]
+            return datetime.fromisoformat(clean_str)
         except (ValueError, TypeError): return None
 
     def _calculate_remaining_days(self, start_date_str: Optional[str], package_days: Optional[int]) -> Optional[int]:
         if package_days in [None, 0]: return None
         try:
             start_date = datetime.fromisoformat(start_date_str.split('T')[0]).date()
+            expiration_date = start_date + timedelta(days=package_days)
+            return (expiration_date - datetime.now(self.tehran_tz).date()).days
         except (ValueError, TypeError, AttributeError):
+            # Fallback to now if start_date is invalid
             start_date = datetime.now(self.tehran_tz).date()
-        expiration_date = start_date + timedelta(days=package_days)
-        return (expiration_date - datetime.now(self.tehran_tz).date()).days
+            expiration_date = start_date + timedelta(days=package_days)
+            return (expiration_date - start_date).days
 
     def _norm(self, raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not isinstance(raw, dict): return None
+        # *** ADDING LOG ***
+        logger.info(f"[HIDDIFY_RAW_DATA] Raw user data for {raw.get('name')}: {raw}")
+        
         usage_limit = safe_float(raw.get("usage_limit_GB", 0))
         current_usage = safe_float(raw.get("current_usage_GB", 0))
-        return {
+        
+        normalized_data = {
             "name": raw.get("name") or "کاربر ناشناس",
             "uuid": raw.get("uuid", "").lower(),
             "is_active": bool(raw.get("enable", False)),
@@ -67,7 +76,11 @@ class HiddifyAPIHandler:
             "expire": self._calculate_remaining_days(raw.get("start_date"), raw.get("package_days")),
             "mode": raw.get("mode", "no_reset")
         }
+        # *** ADDING LOG ***
+        logger.info(f"[HIDDIFY_NORMALIZED_DATA] Normalized user data: {normalized_data}")
+        return normalized_data
 
+    # ... (get_all_users, user_info, etc. remain the same) ...
     @cached(api_cache)
     def get_all_users(self) -> List[Dict[str, Any]]:
         """فقط کاربران پنل Hiddify را برمیگرداند."""

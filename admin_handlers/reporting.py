@@ -6,7 +6,7 @@ import pytz
 from telebot import types
 
 # FIX: واردات مطلق
-from hiddify_api_handler import api_handler
+from hiddify_api_handler import hiddify_handler
 from marzban_api_handler import marzban_handler
 from database import db
 from menu import menu
@@ -37,7 +37,7 @@ def handle_analytics_menu(call, params):
 
 def handle_health_check(call, params):
     bot.answer_callback_query(call.id, "در حال دریافت اطلاعات پنل...")
-    info = api_handler.get_panel_info()
+    info = hiddify_handler.get_panel_info()
     text = fmt_hiddify_panel_info(info) if info else "❌ اطلاعاتی دریافت نشد."
     kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:analytics_menu:hiddify"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
@@ -52,7 +52,7 @@ def handle_marzban_system_stats(call, params):
 def handle_paginated_list(call, params):
     list_type, panel, page = params[0], params[1] if len(params) > 2 else None, int(params[-1])
     users, all_panel_users = [], []
-    if panel == 'hiddify': all_panel_users = api_handler.get_all_users()
+    if panel == 'hiddify': all_panel_users = hiddify_handler.get_all_users()
     elif panel == 'marzban': all_panel_users = marzban_handler.get_all_users()
     
     if list_type == "panel_users": users = all_panel_users

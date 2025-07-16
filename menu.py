@@ -159,8 +159,7 @@ class Menu:
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         
-        # FIX: Shortened callback prefixes to stay under the 64-byte limit.
-        p = panel[0]  # 'h' for hiddify, 'm' for marzban
+        p = panel[0]
         
         status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
         kb.add(types.InlineKeyboardButton(status_text, callback_data=f"adm:tgl:{p}:{identifier}"))
@@ -256,7 +255,6 @@ class Menu:
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.add(
             types.InlineKeyboardButton("➕ افزودن کاربر جدید", callback_data=f"admin:add_user:{panel}"),
-            types.InlineKeyboardButton("🔍 جستجوی کاربر", callback_data=f"admin:search_user:{panel}"),
             types.InlineKeyboardButton("📋 لیست کاربران پنل", callback_data=f"admin:list:panel_users:{panel}:0")
         )
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به انتخاب پنل", callback_data="admin:management_menu"))

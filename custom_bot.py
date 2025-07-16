@@ -7,7 +7,6 @@ from telebot import TeleBot
 
 from config import LOG_LEVEL, ADMIN_IDS, BOT_TOKEN
 from database import db
-from hiddify_api_handler import hiddify_handler
 from scheduler import SchedulerManager
 from user_handlers import register_user_handlers
 from admin_router import register_admin_handlers

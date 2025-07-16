@@ -4,9 +4,8 @@ from config import EMOJIS, PAGE_SIZE
 from database import db
 import jdatetime
 from utils import (
-    persian_date,
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid 
+    format_relative_time, validate_uuid , format_datetime_for_user
 )
 
 def format_shamsi_tehran(dt_obj: datetime | None) -> str:
@@ -50,7 +49,7 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
         line = f"`•` *{name}*"
         
         if list_type == 'active':
-            last_online_str = persian_date(user.get('last_online')).split(' - ')[-1]
+            last_online_str = format_datetime_for_user(user.get('last_online')).split(' - ')[-1]
             usage_p = user.get('usage_percentage', 0)
             line += f" `|` Last Seen: `{escape_markdown(last_online_str)}` `|` Usage: `{usage_p:.1f}%`"
 
@@ -383,7 +382,7 @@ def fmt_admin_user_summary(info: dict) -> str:
         h_limit_str = escape_markdown(f"{h_info.get('limit', 0):.2f}")
         h_usage_str = escape_markdown(f"{h_info.get('usage', 0):.2f}")
         h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0)))
-        h_last_online_str = format_shamsi_tehran(h_info.get('last_online'))
+        h_last_online_str = escape_markdown(format_datetime_for_user(h_info.get('last_online')))
         
         breakdown_lines.extend([
             "\nآلمان 🇩🇪",
@@ -396,7 +395,7 @@ def fmt_admin_user_summary(info: dict) -> str:
         m_limit_str = escape_markdown(f"{m_info.get('limit', 0):.2f}")
         m_usage_str = escape_markdown(f"{m_info.get('usage', 0):.2f}")
         m_daily_str = escape_markdown(format_daily_usage(m_info.get('daily_usage', 0)))
-        m_last_online_str = format_shamsi_tehran(m_info.get('last_online'))
+        m_last_online_str = escape_markdown(format_datetime_for_user(m_info.get('last_online')))
         
         breakdown_lines.extend([
             "\nفرانسه 🇫🇷",

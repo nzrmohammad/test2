@@ -11,12 +11,13 @@ logger = logging.getLogger(__name__)
 
 class MarzbanAPIHandler:
     def __init__(self):
-        self.base_url = MARZBAN_API_BASE_URL
+        self.base_url = MARZBAN_API_BASE_URL.rstrip('/')
+        self.api_base_url = f"{self.base_url}/api"
         self.username = MARZBAN_API_USERNAME
         self.password = MARZBAN_API_PASSWORD
-        self.access_token = self._get_access_token()
-        self.uuid_to_username_map, self.username_to_uuid_map = self._load_uuid_maps()
+        self.access_token = None
         self.utc_tz = pytz.utc
+        self.uuid_to_username_map, self.username_to_uuid_map = self._load_uuid_maps()
 
     def _load_uuid_maps(self):
         try:
@@ -138,6 +139,7 @@ class MarzbanAPIHandler:
         except requests.exceptions.RequestException as e:
             logger.error(f"Marzban: Failed to modify user '{username}': {e}")
             return False
+        
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:
         if not date_str:
             return None
@@ -187,41 +189,32 @@ class MarzbanAPIHandler:
             return []
         
     def get_user_by_username(self, username: str) -> dict | None:
-        """Gets a single user's details from Marzban by their username."""
-        if not self.access_token:
-            return None
-        try:
-            url = f"{self.base_url}/api/user/{username}"
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()
-            user = response.json()
-            
-            uuid = self.username_to_uuid_map.get(username, username)
-            usage_gb = user.get('used_traffic', 0) / (1024 ** 3)
-            limit_gb = user.get('data_limit', 0) / (1024 ** 3)
-            expire_timestamp = user.get('expire')
-            expire_days = None
-            if expire_timestamp and expire_timestamp > 0:
-                expire_datetime = datetime.fromtimestamp(expire_timestamp, tz=self.utc_tz)
-                expire_days = (expire_datetime - datetime.now(self.utc_tz)).days
+        user = self._request("GET", f"/user/{username}")
+        if not user: return None
 
-            return {
-                "name": username,
-                "uuid": uuid,
-                "is_active": user.get('status') == 'active',
-                "last_online": self._parse_marzban_datetime(user.get('online_at')),
-                "usage_limit_GB": limit_gb,
-                "current_usage_GB": usage_gb,
-                "remaining_GB": max(0, limit_gb - usage_gb),
-                "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
-                "expire": expire_days,
-            }
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Marzban: Failed to get user by username '{username}': {e}")
-            return None
+        # *** ADDING LOG ***
+        logger.info(f"[MARZBAN_RAW_DATA] Raw user data for {username}: {user}")
+
+        uuid = self.username_to_uuid_map.get(username, None)
+        usage_gb = user.get('used_traffic', 0) / (1024 ** 3)
+        limit_gb = user.get('data_limit', 0) / (1024 ** 3)
+        expire_timestamp = user.get('expire')
+        expire_days = None
+        if expire_timestamp and expire_timestamp > 0:
+            expire_datetime = datetime.fromtimestamp(expire_timestamp, tz=self.utc_tz)
+            expire_days = (expire_datetime - datetime.now(self.utc_tz)).days
+
+        normalized_data = {
+            "name": username, "uuid": uuid, "is_active": user.get('status') == 'active',
+            "last_online": self._parse_marzban_datetime(user.get('online_at')),
+            "usage_limit_GB": limit_gb, "current_usage_GB": usage_gb,
+            "remaining_GB": max(0, limit_gb - usage_gb),
+            "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
+            "expire": expire_days,
+        }
+        # *** ADDING LOG ***
+        logger.info(f"[MARZBAN_NORMALIZED_DATA] Normalized user data: {normalized_data}")
+        return normalized_data
 
     def get_system_stats(self) -> dict | None:
             """اطلاعات و آمار کلی سیستم را از پنل مرزبان دریافت می‌کند."""

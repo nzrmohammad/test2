@@ -5,7 +5,7 @@ import pytz
 from datetime import datetime, timedelta
 
 from database import db
-from hiddify_api_handler import api_handler
+from hiddify_api_handler import hiddify_handler
 from marzban_api_handler import marzban_handler
 from menu import menu
 from utils import _safe_edit
@@ -39,7 +39,7 @@ def _send_broadcast(message: types.Message):
     
     if target_group != 'all':
         # FIX: منطق جدید با API Handler های خالص
-        h_users = api_handler.get_all_users()
+        h_users = hiddify_handler.get_all_users()
         m_users = marzban_handler.get_all_users()
         all_users = h_users + [u for u in m_users if u.get('uuid')] # ترکیب با اطمینان از وجود UUID
         
