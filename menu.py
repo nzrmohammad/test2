@@ -4,10 +4,6 @@ from telebot import types
 from config import EMOJIS, PAGE_SIZE
 
 class Menu:
-    """
-    کلاس مدیریت منوهای دکمه شیشه‌ای (Inline Keyboard) ربات.
-    """
-
     # ===============================================
     # متدهای مربوط به کاربر (بدون تغییر در callback)
     # ===============================================
@@ -113,10 +109,12 @@ class Menu:
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back"))
         return kb
 
+    # در فایل menu.py
     def admin_management_menu(self) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:search_user_global"))
         kb.add(
-            types.InlineKeyboardButton("آلمان �🇪", callback_data="admin:manage_panel:hiddify"),
+            types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
             types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
         )
         kb.add(types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"))

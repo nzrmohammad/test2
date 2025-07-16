@@ -5,7 +5,7 @@ import pytz
 from datetime import datetime, timedelta
 
 from database import db
-from api_handler import api_handler
+from hiddify_api_handler import api_handler
 from marzban_api_handler import marzban_handler
 from menu import menu
 from utils import _safe_edit

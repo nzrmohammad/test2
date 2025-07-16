@@ -59,11 +59,7 @@ ADMIN_CALLBACK_HANDLERS = {
     "management_menu": _handle_management_menu,
     "manage_panel": _handle_panel_management_menu,
     "select_server": _handle_server_selection,
-    
-    # مکالمات ساخت کاربر
     "add_user": lambda c, p: (_start_add_user_convo if p[0] == 'hiddify' else _start_add_marzban_user_convo)(c.from_user.id, c.message.message_id),
-    
-    # مدیریت کاربر (از ماژول user_management)
     "search_user": user_management.handle_search_user_convo,
     "us": user_management.handle_show_user_summary,
     "edt": user_management.handle_edit_user_menu,
@@ -74,21 +70,17 @@ ADMIN_CALLBACK_HANDLERS = {
     "rusg_a": user_management.handle_reset_usage_action,
     "del_cfm": user_management.handle_delete_user_confirm,
     "del_a": user_management.handle_delete_user_action,
-
-    # گزارش‌گیری (از ماژول reporting)
     "reports_menu": reporting.handle_reports_menu,
     "analytics_menu": reporting.handle_analytics_menu,
     "health_check": reporting.handle_health_check,
     "marzban_stats": reporting.handle_marzban_system_stats,
     "list": reporting.handle_paginated_list,
-
-    # پیام همگانی (از ماژول broadcast)
     "broadcast": broadcast.start_broadcast_flow,
     "broadcast_target": broadcast.ask_for_broadcast_message,
-    
-    # پشتیبان‌گیری (از ماژول backup)
     "backup_menu": backup.handle_backup_menu,
     "backup": backup.handle_backup_action,
+    "search_user_global": user_management.handle_global_search_convo,
+    "us": user_management.handle_show_user_summary,
 }
 
 # ===================================================================

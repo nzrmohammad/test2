@@ -1,16 +1,15 @@
-# admin_handlers/user_management.py
-
 import logging
 from telebot import types
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 from database import db
-from api_handler import api_handler
+from hiddify_api_handler import api_handler
 from marzban_api_handler import marzban_handler
 from menu import menu
 from admin_formatters import fmt_admin_user_summary
 from utils import _safe_edit, escape_markdown, validate_uuid
+import combined_handler
 
 logger = logging.getLogger(__name__)
 bot, admin_conversations = None, None
@@ -171,34 +170,53 @@ def handle_delete_user_action(call, params):
         else:
             _safe_edit(uid, msg_id, "❌ خطا در حذف کاربر از یک یا هر دو پنل.", reply_markup=menu.admin_management_menu())
 
-def handle_search_user_convo(call, params):
-    panel = params[0]
-    uid, msg_id = call.from_user.id, call.message.message_id
-    prompt = "لطفاً نام یا UUID کاربر مورد نظر برای جستجو در این پنل را وارد کنید:"
-    admin_conversations[uid] = {'panel': panel, 'msg_id': msg_id}
-    _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action(f"admin:manage_panel:{panel}"))
-    bot.register_next_step_handler_by_chat_id(uid, _handle_user_search_response)
 
-def _handle_user_search_response(message: types.Message):
+def handle_global_search_convo(call, params):
+    """مکالمه برای جستجوی جامع کاربر را شروع می‌کند."""
+    uid, msg_id = call.from_user.id, call.message.message_id
+    prompt = "لطفاً نام یا UUID کاربر مورد نظر برای جستجو در هر دو پنل را وارد کنید:"
+    admin_conversations[uid] = {'msg_id': msg_id}
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:management_menu"))
+    bot.register_next_step_handler_by_chat_id(uid, _handle_global_search_response)
+
+def _handle_global_search_response(message: types.Message):
+    """پاسخ جستجو را پردازش کرده و نتایج را نمایش می‌دهد."""
     uid, query = message.from_user.id, message.text.strip()
     convo_data = admin_conversations.pop(uid, None)
     if not convo_data: return
-    panel, original_msg_id = convo_data['panel'], convo_data['msg_id']
-    try: bot.delete_message(uid, message.message_id)
-    except Exception: pass
+
+    original_msg_id = convo_data['msg_id']
     _safe_edit(uid, original_msg_id, "⏳ در حال جستجو...")
-    info = None
-    if panel == 'hiddify':
-        all_users = api_handler.get_all_users()
-        found_user = next((u for u in all_users if query.lower() in u.get('name', '').lower() or query.lower() in u.get('uuid', '').lower()), None)
-        if found_user: info = _get_combined_user_info(found_user.get('uuid'))
-    elif panel == 'marzban':
-        info = _get_combined_user_info(query)
-    if info:
-        identifier = info.get('uuid') or info.get('name')
-        text = fmt_admin_user_summary(info)
-        kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
-        _safe_edit(uid, original_msg_id, text, reply_markup=kb)
+
+    # استفاده از هندلر جستجوی جدید
+    results = search_user(query)
+
+    if not results:
+        _safe_edit(uid, original_msg_id, f"❌ کاربری با مشخصات `{escape_markdown(query)}` یافت نشد.", reply_markup=menu.cancel_action("admin:management_menu"))
+        return
+
+    if len(results) == 1:
+        # اگر فقط یک نتیجه بود، مستقیم به صفحه مدیریت کاربر برو
+        user = results[0]
+        panel = user['panel']
+        identifier = user.get('uuid') or user.get('name')
+        # برای نمایش اطلاعات کامل، از api_handler مربوطه استفاده می‌کنیم
+        info = hiddify_handler.user_info(identifier) if panel == 'hiddify' else marzban_handler.get_user_by_username(identifier)
+        if info:
+            text = fmt_admin_user_summary(info)
+            kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
+            _safe_edit(uid, original_msg_id, text, reply_markup=kb)
     else:
-        _safe_edit(uid, original_msg_id, f"❌ کاربری با مشخصات `{escape_markdown(query)}` یافت نشد.", reply_markup=menu.cancel_action(f"admin:manage_panel:{panel}"))
+        # اگر نتایج متعدد بود، لیست آن‌ها را نمایش بده
+        kb = types.InlineKeyboardMarkup()
+        for user in results:
+            panel_emoji = "🇩🇪" if user['panel'] == 'hiddify' else "🇫🇷"
+            identifier = user.get('uuid') or user.get('name')
+            kb.add(types.InlineKeyboardButton(
+                f"{panel_emoji} {user['name']}",
+                callback_data=f"adm:us:{user['panel']}:{identifier}"
+            ))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:management_menu"))
+        _safe_edit(uid, original_msg_id, "چندین کاربر یافت شد. لطفاً یکی را انتخاب کنید:", reply_markup=kb)
+
 

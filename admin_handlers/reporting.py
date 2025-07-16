@@ -6,7 +6,7 @@ import pytz
 from telebot import types
 
 # FIX: واردات مطلق
-from api_handler import api_handler
+from hiddify_api_handler import api_handler
 from marzban_api_handler import marzban_handler
 from database import db
 from menu import menu

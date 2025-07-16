@@ -115,4 +115,4 @@ class HiddifyAPIHandler:
             logger.error(f"Hiddify API request for panel info failed: {e}")
             return None
 
-api_handler = HiddifyAPIHandler()
+hiddify_handler = HiddifyAPIHandler()
