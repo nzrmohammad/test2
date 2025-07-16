@@ -93,3 +93,23 @@ def get_all_users_combined() -> List[Dict[str, Any]]:
             all_users_map[user['uuid']] = user
             
     return list(all_users_map.values())
+
+def search_user(query: str) -> List[Dict[str, Any]]:
+    query_lower = query.lower()
+    results = []
+    found_uuids = set()
+
+    hiddify_users = hiddify_handler.get_all_users()
+    for user in hiddify_users:
+        if query_lower in user.get('name', '').lower() or query_lower in user.get('uuid', ''):
+            results.append({**user, 'panel': 'hiddify'}) # اضافه کردن پنل مبدا
+            found_uuids.add(user.get('uuid'))
+
+    marzban_users = marzban_handler.get_all_users()
+    for user in marzban_users:
+        if user.get('uuid') in found_uuids:
+            continue
+        if query_lower in user.get('name', '').lower():
+            results.append({**user, 'panel': 'marzban'}) # اضافه کردن پنل مبدا
+
+    return results

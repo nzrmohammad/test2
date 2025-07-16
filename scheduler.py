@@ -28,7 +28,7 @@ class SchedulerManager:
         """Takes a usage snapshot for all active UUIDs every hour."""
         logger.info("Scheduler: Running hourly usage snapshot job.")
         
-        all_users_info = combined_handler.get_all_users_combined() # (این تابع را در combined_handler پیاده‌سازی کنید)
+        all_users_info = combined_handler.get_all_users_combined()
         if not all_users_info:
             return
             
@@ -44,15 +44,11 @@ class SchedulerManager:
                 if uuid_str in user_info_map:
                     info = user_info_map[uuid_str]
                     
-                    # --- شروع تغییر اصلی ---
-                    # اطلاعات مصرف تفکیکی را از ساختار breakdown می‌خوانیم
                     breakdown = info.get('breakdown', {})
                     h_usage = breakdown.get('hiddify', {}).get('usage', 0.0)
                     m_usage = breakdown.get('marzban', {}).get('usage', 0.0)
                     
-                    # ذخیره اطلاعات تفکیکی در دیتابیس
                     db.add_usage_snapshot(u_row['id'], h_usage, m_usage)
-                    # --- پایان تغییر اصلی ---
 
             except Exception as e:
                 logger.error(f"Scheduler: Failed to process snapshot for uuid_id {u_row['id']}: {e}")
@@ -65,7 +61,7 @@ class SchedulerManager:
         if not all_uuids:
             return
 
-        all_users_info_map = {u['uuid']: u for u in api_handler.get_all_users()}
+        all_users_info_map = {u['uuid']: u for u in combined_handler.get_all_users()}
         
         for u_row in all_uuids:
             uuid_str = u_row['uuid']
@@ -93,7 +89,6 @@ class SchedulerManager:
                             logger.error(f"Failed to send expiry warning to user {user_id}: {e}")
 
 
-            # ۲. بررسی هشدار حجم به تفکیک سرور
             breakdown = info.get('breakdown', {})
             server_map = {
                 'hiddify': {'name': 'آلمان 🇩🇪', 'setting': 'data_warning_hiddify'},
@@ -111,7 +106,6 @@ class SchedulerManager:
                         remaining_percent = (remaining_gb / limit) * 100
                         
                         warning_type = f'low_data_{code}'
-                        # اگر کمتر از ۲۰ درصد باقی مانده بود
                         if 0 < remaining_percent <= 20:
                             if not db.has_recent_warning(uuid_id, warning_type):
                                 user_name = escape_markdown(info.get('name', 'کاربر ناشناس'))
@@ -130,7 +124,7 @@ class SchedulerManager:
         now_str = now.strftime("%Y/%m/%d - %H:%M")
         logger.info(f"Scheduler: Running nightly reports at {now_str}")
 
-        all_users_info_from_api = api_handler.get_all_users()
+        all_users_info_from_api = combined_handler.get_all_users()
         if not all_users_info_from_api:
             logger.warning("Scheduler: Could not fetch user info from API for nightly report.")
             return
@@ -185,7 +179,7 @@ class SchedulerManager:
                 chat_id = msg_info['chat_id']
                 message_id = msg_info['message_id']
                 
-                online_list = api_handler.online_users()
+                online_list = combined_handler.online_users()
                 for user in online_list:
                     user['daily_usage_GB'] = db.get_usage_since_midnight_by_uuid(user['uuid'])
                 
@@ -219,8 +213,7 @@ class SchedulerManager:
             gift_applied = False
             for row in user_uuids:
                 uuid = row['uuid']
-                # ✅ [FIXED] فراخوانی مستقیم api_handler به جای self.api_handler
-                if api_handler.modify_user(uuid, add_usage_gb=BIRTHDAY_GIFT_GB, add_days=BIRTHDAY_GIFT_DAYS):
+                if combined_handler.modify_user(uuid, add_usage_gb=BIRTHDAY_GIFT_GB, add_days=BIRTHDAY_GIFT_DAYS):
                     gift_applied = True
             
             if gift_applied:

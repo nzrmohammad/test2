@@ -18,7 +18,7 @@ def _save_first_uuid(message: types.Message):
         if m: bot.register_next_step_handler(m, _save_first_uuid)
         return
         
-    info = api_handler.user_info(uuid_str)
+    info = combined_handler.user_info(uuid_str)
     if not info:
         m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
@@ -50,7 +50,7 @@ def _add_uuid_step(message: types.Message):
         if m: bot.register_next_step_handler(m, _add_uuid_step)
         return
 
-    info = api_handler.user_info(uuid_str)
+    info = combined_handler.user_info(uuid_str)
     if not info:
         m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید یا عملیات را لغو کنید\\.", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _add_uuid_step)
