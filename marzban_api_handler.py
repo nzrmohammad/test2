@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import pytz
 from config import MARZBAN_API_BASE_URL, MARZBAN_API_USERNAME, MARZBAN_API_PASSWORD, API_TIMEOUT
 from database import db
+from utils import validate_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +75,11 @@ class MarzbanAPIHandler:
             logger.error(f"Marzban: Failed to add user '{user_data.get('username')}': {e}")
             return None
 
-    def modify_user(self, username: str, add_usage_gb: float = 0, add_days: int = 0) -> bool:
-        """Modifies an existing Marzban user."""
+    def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
+        """Modifies an existing Marzban user by username."""
         if not self.access_token:
             return False
-        
+
         try:
             get_url = f"{self.base_url}/api/user/{username}"
             headers = {"Authorization": f"Bearer {self.access_token}"}
@@ -86,7 +87,9 @@ class MarzbanAPIHandler:
             current_response.raise_for_status()
             current_data = current_response.json()
 
-            payload = {}
+            # Initialize payload with data from the 'data' argument if it exists
+            payload = data.copy() if data else {}
+
             if add_usage_gb != 0:
                 current_limit = current_data.get('data_limit', 0)
                 payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
@@ -100,18 +103,17 @@ class MarzbanAPIHandler:
                 payload['expire'] = int(new_expire_dt.timestamp())
 
             if not payload:
+                # Nothing to change
                 return True
 
             put_url = f"{self.base_url}/api/user/{username}"
-            response = requests.put(put_url, headers=headers, json=payload, timeout=API_TIMEOUT)
+            response = requests.put(put_url, headers={"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}, json=payload, timeout=API_TIMEOUT)
             response.raise_for_status()
             return True
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Marzban: Failed to modify user '{username}': {e}")
             return False
-    # --- END OF CODE TO ADD ---
-
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:
         if not date_str:
             return None
@@ -139,8 +141,8 @@ class MarzbanAPIHandler:
 
     def get_all_users(self) -> list[dict]:
         """
-        Fetches all users from the Marzban panel and enriches them with a reliable
-        database ID for use in bot keyboards.
+        Fetches all users from the Marzban panel and returns their full,
+        normalized data.
         """
         if not self.access_token:
             return []
@@ -151,29 +153,14 @@ class MarzbanAPIHandler:
             response.raise_for_status()
             users_data = response.json().get("users", [])
             
-            # Get a map of all UUIDs to their bot database IDs for quick lookup
-            uuid_to_id_map = {item['uuid']: item['id'] for item in db.all_active_uuids()}
-            
             all_users = []
             for user in users_data:
                 username = user.get("username")
-                # 1. Find the corresponding Hiddify UUID from the mapping file
-                hiddify_uuid = self.username_to_uuid_map.get(username)
-                
-                # 2. Use the Hiddify UUID to find the internal database ID
-                # This ID is short, reliable, and perfect for callback_data
-                db_id = uuid_to_id_map.get(hiddify_uuid) if hiddify_uuid else None
-
-                # 3. Use the Hiddify UUID if it exists, otherwise fall back to the Marzban username
-                # This identifier is used for fetching detailed info later
-                identifier = hiddify_uuid or username
-
-                all_users.append({
-                    "name": username,
-                    "uuid": identifier,  # The identifier for API calls
-                    "db_id": db_id      # The reliable ID for buttons
-                })
-                
+                if username:
+                    detailed_info = self.get_user_by_username(username)
+                    if detailed_info:
+                        all_users.append(detailed_info)
+                        
             return all_users
         except requests.exceptions.RequestException as e:
             logger.error(f"Marzban: Failed to get all users: {e}")
@@ -229,5 +216,33 @@ class MarzbanAPIHandler:
             except requests.exceptions.RequestException as e:
                 logger.error(f"Marzban: Failed to get system stats: {e}")
                 return None
+
+    def delete_user(self, username: str) -> bool:
+        """Deletes a user from the Marzban panel by username."""
+        if not self.access_token:
+            return False
+        try:
+            url = f"{self.base_url}/api/user/{username}"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban: Failed to delete user '{username}': {e}")
+            return False
+
+    def reset_user_usage(self, username: str) -> bool:
+        """Resets a user's data usage in the Marzban panel."""
+        if not self.access_token:
+            return False
+        try:
+            url = f"{self.base_url}/api/user/{username}/reset"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.post(url, headers=headers, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban: Failed to reset usage for user '{username}': {e}")
+            return False
 
 marzban_handler = MarzbanAPIHandler()

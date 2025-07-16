@@ -7,7 +7,7 @@ import jdatetime
 from utils import (
     persian_date,
     format_daily_usage, escape_markdown,
-    format_relative_time
+    format_relative_time, validate_uuid 
 )
 
 def fmt_users_list(users: list, list_type: str, page: int) -> str:
@@ -19,7 +19,7 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
     title = title_map.get(list_type, "لیست کاربران")
     
     if not users:
-        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این دسته یافت نشد."
+        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این دسته یافت نشد\\."
 
     header_text = f"*{escape_markdown(title)}*"
     if len(users) > PAGE_SIZE:
@@ -59,7 +59,7 @@ def fmt_online_users_list(users: list, page: int) -> str:
     title = "⚡️ کاربران آنلاین (۳ دقیقه اخیر)"
     
     if not users:
-        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این لحظه آنلاین نیست."
+        return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این لحظه آنلاین نیست\\."
 
     header_text = f"*{escape_markdown(title)}*"
     if len(users) > PAGE_SIZE:
@@ -79,7 +79,6 @@ def fmt_online_users_list(users: list, page: int) -> str:
         name_str = escape_markdown(panel_name_raw)
         if bot_user_info and bot_user_info.get('user_id'):
             user_id = bot_user_info['user_id']
-            # Note: Markdown links need special escaping.
             name_str = f"[{escape_markdown(panel_name_raw)}](tg://user?id={user_id})"
 
         daily_usage_output = escape_markdown(format_daily_usage(user.get('daily_usage_GB', 0)))
@@ -97,12 +96,10 @@ def fmt_online_users_list(users: list, page: int) -> str:
 
 def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
     if not all_users_from_api:
-        return "هیچ کاربری در پنل یافت نشد."
+        return "هیچ کاربری در پنل یافت نشد\\."
 
     total_usage_all, active_users = 0.0, 0
-    # --- شروع تغییر ---
     total_daily_hiddify, total_daily_marzban = 0.0, 0.0
-    # --- پایان تغییر ---
     online_users, expiring_soon_users, new_users_today = [], [], []
     
     now_utc = datetime.now(pytz.utc)
@@ -115,13 +112,13 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
             active_users += 1
         total_usage_all += user_info.get("current_usage_GB", 0)
         
-        # --- شروع تغییر ---
         daily_usage_dict = db_manager.get_usage_since_midnight_by_uuid(user_info['uuid'])
         total_daily_hiddify += daily_usage_dict.get('hiddify', 0.0)
         total_daily_marzban += daily_usage_dict.get('marzban', 0.0)
-        # --- پایان تغییر ---
         
         if user_info.get('is_active') and user_info.get('last_online') and user_info['last_online'].astimezone(pytz.utc) >= online_deadline:
+            # افزودن مصرف روزانه به اطلاعات کاربر آنلاین برای استفاده در ادامه
+            user_info['daily_usage_dict'] = daily_usage_dict
             online_users.append(user_info)
 
         if user_info.get('expire') is not None and 0 <= user_info['expire'] <= 3:
@@ -138,18 +135,22 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
         f"\\- {EMOJIS['success']} اکانت‌های فعال: *{active_users}*",
         f"\\- {EMOJIS['wifi']} کاربران آنلاین: *{len(online_users)}*",
         f"\\- {EMOJIS['chart']} *مجموع مصرف کل:* `{escape_markdown(f'{total_usage_all:.2f}')} GB`",
-        f"\\- {EMOJIS['lightning']} *مصرف امروز کل:* `{escape_markdown(format_daily_usage(total_daily_all))}`"
+        f"\\- {EMOJIS['lightning']} *مصرف امروز کل:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
+        # بخش جدید برای نمایش تفکیک مصرف روزانه کل
+        f"  `\\- 🇩🇪 آلمان:* `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
+        f"  `\\- 🇫🇷 فرانسه:* `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
     ]
 
     if online_users:
         report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['wifi']} {escape_markdown('کاربران آنلاین و مصرف امروزشان:')}*")
         online_users.sort(key=lambda u: u.get('name', ''))
         for user in online_users:
-            daily_dict = db_manager.get_usage_since_midnight_by_uuid(user['uuid'])
-            daily_total = sum(daily_dict.values())
             user_name = escape_markdown(user.get('name', 'کاربر ناشناس'))
-            usage_str = escape_markdown(format_daily_usage(daily_total))
-            report_lines.append(f"`•` *{user_name}:* `{usage_str}`")
+            # نمایش مصرف روزانه به تفکیک برای هر کاربر آنلاین
+            daily_dict = user.get('daily_usage_dict', {})
+            h_daily_str = escape_markdown(format_daily_usage(daily_dict.get('hiddify', 0.0)))
+            m_daily_str = escape_markdown(format_daily_usage(daily_dict.get('marzban', 0.0)))
+            report_lines.append(f"`•` *{user_name}:* 🇩🇪`{h_daily_str}` | 🇫🇷`{m_daily_str}`")
 
     if expiring_soon_users:
         report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['warning']} {escape_markdown('کاربرانی که به زودی منقضی می‌شوند (تا ۳ روز):')}*")
@@ -343,7 +344,13 @@ def fmt_admin_user_summary(info: dict) -> str:
         return "❌ خطا در دریافت اطلاعات کاربر."
 
     name = escape_markdown(info.get("name", "کاربر ناشناس"))
-    uuid = escape_markdown(info.get("uuid", "N/A"))
+    # Use the primary identifier, which could be UUID or username
+    identifier = escape_markdown(info.get("uuid") or info.get("name", "N/A"))
+    
+    # Determine the correct label for the identifier
+    is_uuid = validate_uuid(info.get("uuid", ""))
+    identifier_label = "شناسه یکتا" if is_uuid else "نام کاربری"
+
     status_emoji = "🟢" if info.get("is_active") else "🔴"
     status_text = escape_markdown(f"وضعیت : {status_emoji} فعال" if info.get("is_active") else f"وضعیت : {status_emoji} غیرفعال")
 
@@ -397,7 +404,7 @@ def fmt_admin_user_summary(info: dict) -> str:
         breakdown_str,
         separator,
         f"*کل:* `{total_usage_gb:.2f} / {total_limit_gb:.2f} GB`",
-        f"*شناسه یکتا :* `{uuid}`"
+        f"*{identifier_label} :* `{identifier}`"
     ])
     
     return "\n".join(report_parts)

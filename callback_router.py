@@ -14,7 +14,7 @@ def register_callback_router(bot: telebot.TeleBot):
         # Always answer the callback query to remove the "loading" state on the user's side
         bot.answer_callback_query(call.id)
 
-        if is_admin and (data.startswith("admin_") or data.startswith("broadcast_target_")):
+        if is_admin and (data.startswith("admin_") or data.startswith("broadcast_target_") or data.startswith("ad_")):
             handle_admin_callbacks(call)
         else:
             handle_user_callbacks(call)

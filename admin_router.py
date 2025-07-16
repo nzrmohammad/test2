@@ -73,30 +73,27 @@ def _handle_user_search(message: types.Message):
     found_user = next((u for u in all_users if query.lower() in u.get('name', '').lower() or query.lower() in u.get('uuid', '').lower()), None)
 
     if found_user:
-        user_uuid = found_user.get('uuid')
-        # --- FIX: Get the reliable and short database ID ---
-        db_id = db.get_uuid_id_by_uuid(user_uuid)
-
-        if not db_id:
-            err_msg = f"❌ کاربر `{escape_markdown(query)}` در پنل یافت شد، اما در دیتابیس ربات ثبت نشده است."
-            _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.cancel_action(f"admin_manage_panel_{panel}"), parse_mode="MarkdownV2")
-            log_adapter.warning(f"User '{user_uuid}' found in panel but not in bot's database.")
-            return
-
-        info = api_handler.user_info(user_uuid)
+        # Use the primary identifier (UUID or username) for all operations
+        identifier = found_user.get('uuid') or found_user.get('name')
+        
+        info = api_handler.user_info(identifier) # Fetch full details using the smart user_info
         if not info:
-            err_msg = f"❌ خطایی در دریافت جزئیات کاربر `{escape_markdown(query)}` رخ داد."
-            _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.admin_panel_management_menu(panel), parse_mode="MarkdownV2")
+            err_msg = f"❌ خطایی در دریافت جزئیات کاربر `{escape_markdown(query)}` رخ داد\\."
+            _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.admin_panel_management_menu(panel))
             return
 
-        daily_usage = db.get_usage_since_midnight(db_id)
+        # Fetch daily usage if the user is in the database, otherwise, it's empty
+        db_id = db.get_uuid_id_by_uuid(identifier)
+        daily_usage = db.get_usage_since_midnight(db_id) if db_id else {}
+        
         text = fmt_admin_user_summary(info)
-        # --- FIX: Pass the short db_id to the menu function ---
-        kb = menu.admin_user_interactive_management(db_id, info.get('is_active', False), panel)
+        
+        # Pass the main identifier (string) to the menu function
+        kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
         _safe_edit(uid, original_msg_id, text, reply_markup=kb)
     else:
-        err_msg = f"❌ کاربری با مشخصات `{escape_markdown(query)}` در این پنل یافت نشد."
-        _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.cancel_action(f"admin_manage_panel_{panel}"), parse_mode="MarkdownV2")
+        err_msg = f"❌ کاربری با مشخصات `{escape_markdown(query)}` در این پنل یافت نشد\\."
+        _safe_edit(uid, original_msg_id, err_msg, reply_markup=menu.cancel_action(f"admin_manage_panel_{panel}"))
 
 # --- Broadcast Flow ---
 def _start_broadcast_flow(uid, msg_id):
@@ -165,6 +162,8 @@ def _ask_for_new_value(uid, msg_id, edit_type: str):
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action(back_callback))
     bot.register_next_step_handler_by_chat_id(uid, _apply_user_edit)
 
+# In admin_router.py
+
 def _apply_user_edit(msg: types.Message):
     uid, text = msg.from_user.id, msg.text.strip()
     log_adapter = logging.LoggerAdapter(logger, {'user_id': uid})
@@ -172,33 +171,17 @@ def _apply_user_edit(msg: types.Message):
     if uid not in admin_conversations:
         return
 
-    convo = admin_conversations.get(uid, {})
-    # --- FIX: Retrieve db_id and panel context ---
-    db_id = convo.get('identifier') # Note: identifier is now the db_id
+    convo = admin_conversations.pop(uid, {})
+    identifier = convo.get('identifier') # This is now a string (UUID or username)
     edit_type = convo.get('edit_type')
     panel = convo.get('panel')
     msg_id = convo.get('msg_id')
 
-    admin_conversations.pop(uid, None)
-
-    if not all([db_id, edit_type, panel, msg_id]):
-        bot.send_message(uid, "خطای داخلی: اطلاعات ویرایش ناقص است. لطفاً دوباره تلاش کنید.", parse_mode="MarkdownV2")
+    if not all([identifier, edit_type, panel, msg_id]):
+        bot.send_message(uid, "خطای داخلی: اطلاعات ویرایش ناقص است. لطفاً دوباره تلاش کنید.", parse_mode=None)
         log_adapter.error("Incomplete conversation data for user edit.")
         return
 
-    # Retrieve the UUID from db_id
-    uuid_row = db.uuid_by_id(uid, db_id) # First check if admin owns it
-    if not uuid_row: # Fallback for any admin managing any user
-         uuid_obj = db.execute("SELECT uuid FROM user_uuids WHERE id = ?", (db_id,)).fetchone()
-         uuid_row = {'uuid': uuid_obj['uuid']} if uuid_obj else None
-
-    if not uuid_row:
-        bot.send_message(uid, "خطای دیتابیس: شناسه کاربر یافت نشد.", parse_mode="MarkdownV2")
-        return
-    
-    identifier = uuid_row['uuid'] # The full UUID for API calls
-
-    # --- Start of logic change ---
     try:
         value = float(text)
         add_gb, add_days = 0, 0
@@ -206,31 +189,26 @@ def _apply_user_edit(msg: types.Message):
         elif edit_type == "adddays": add_days = int(value)
 
         success = False
-        # --- FIX: Apply modification only to the specific panel in context ---
         if panel == 'hiddify':
             log_adapter.info(f"Admin modifying user {identifier} on Hiddify panel.")
             success = api_handler.modify_user(identifier, add_usage_gb=add_gb, add_days=add_days)
         elif panel == 'marzban':
             log_adapter.info(f"Admin modifying user {identifier} on Marzban panel.")
-            # Note: Marzban handler needs the username, but our identifier is the UUID.
-            # We assume marzban_handler can resolve this or we retrieve the username.
-            # For now, let's assume the handler is smart. If not, this needs adjustment.
             success = marzban_handler.modify_user(identifier, add_usage_gb=add_gb, add_days=add_days)
 
         if success:
             new_info = api_handler.user_info(identifier)
-            # We use the new admin-formatter here (defined in the next section)
-            text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ کاربر با موفقیت ویرایش شد.*"
-            _safe_edit(uid, msg_id, text_to_show, reply_markup=menu.admin_user_interactive_management(db_id, new_info['is_active'], panel))
+            text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ کاربر با موفقیت ویرایش شد\\.*"
+            _safe_edit(uid, msg_id, text_to_show, reply_markup=menu.admin_user_interactive_management(identifier, new_info['is_active'], panel))
         else:
-            _safe_edit(uid, msg_id, "❌ خطا در ویرایش کاربر.", reply_markup=menu.admin_user_interactive_management(db_id, True, panel))
+            _safe_edit(uid, msg_id, "❌ خطا در ویرایش کاربر\\.", reply_markup=menu.admin_user_interactive_management(identifier, True, panel))
 
     except (ValueError, TypeError):
-         _safe_edit(uid, msg_id, "❌ ورودی نامعتبر. لطفاً یک عدد صحیح وارد کنید.", reply_markup=menu.admin_user_interactive_management(db_id, True, panel))
+         _safe_edit(uid, msg_id, "❌ ورودی نامعتبر\\. لطفاً یک عدد صحیح وارد کنید\\.", reply_markup=menu.admin_user_interactive_management(identifier, True, panel))
     except Exception as e:
         log_adapter.error(f"Admin edit error for user {identifier}: {e}")
-        _safe_edit(uid, msg_id, "❌ خطای ناشناخته رخ داد.", reply_markup=menu.admin_user_interactive_management(db_id, True, panel))
-# --- Other Handlers ---
+        _safe_edit(uid, msg_id, "❌ خطای ناشناخته رخ داد\\.", reply_markup=menu.admin_user_interactive_management(identifier, True, panel))
+
 def _handle_health_check(call: types.CallbackQuery):
     try:
         bot.answer_callback_query(call.id, "در حال دریافت اطلاعات پنل\\.\\.\\.")
@@ -372,64 +350,144 @@ def handle_admin_callbacks(call: types.CallbackQuery):
         try:
             parts = data.split('_')
             panel = parts[2]
-            db_id = int(parts[3])
+            # Correctly join the rest of the parts to form the string identifier
+            identifier = '_'.join(parts[3:])
             
-            # --- FIX: Pass both db_id and panel to the menu function ---
-            _safe_edit(uid, msg_id, "🔧 *کدام ویژگی را می‌خواهید ویرایش کنید؟*", reply_markup=menu.admin_edit_user_menu(db_id, panel))
+            _safe_edit(uid, msg_id, "🔧 *کدام ویژگی را می‌خواهید ویرایش کنید؟*", reply_markup=menu.admin_edit_user_menu(identifier, panel))
         except (IndexError, ValueError) as e:
             logger.error(f"Could not parse callback for user edit: {data} - Error: {e}")
             bot.answer_callback_query(call.id, "خطای داخلی در پردازش دکمه ویرایش.", show_alert=True)
         return
 
 
-    if data.startswith("ad_act_"):
-        try:
-            parts = data.split('_')
-            action = parts[2]  # e.g., 'addgb' or 'adddays'
-            panel = parts[3]
-            db_id = int(parts[4])
-            
-            # --- FIX: Store all context needed for the next step ---
-            admin_conversations[uid] = {
-                'edit_type': action,
-                'panel': panel,
-                'identifier': db_id, # identifier is now the db_id
-                'msg_id': msg_id
-            }
-            
-            _ask_for_new_value(uid, msg_id, action)
-        except (IndexError, ValueError) as e:
-            logger.error(f"Could not parse callback for user action: {data} - Error: {e}")
-            bot.answer_callback_query(call.id, "خطای داخلی در پردازش دکمه.", show_alert=True)
-        return
+    if data.startswith("ad_"):
+        parts = data.split('_')
+        action = parts[1]
 
-    # --- User Info Display ---
-    if data.startswith("ad_sr_"): # "Show Result" (Back button)
-        try:
-            parts = data.split('_')
+        # --- Display User Info / Back from Edit ---
+        if action == "sr":
             panel = parts[2]
-            db_id = int(parts[3])
-            
-            # Retrieve UUID from db_id
-            uuid_row = db.uuid_by_id(uid, db_id) or db.execute("SELECT uuid FROM user_uuids WHERE id = ?", (db_id,)).fetchone()
-            if not uuid_row:
-                _safe_edit(uid, msg_id, "خطا: کاربر یافت نشد.", reply_markup=menu.admin_panel())
-                return
-
-            info = api_handler.user_info(uuid_row['uuid'])
+            identifier = '_'.join(parts[3:])
+            info = api_handler.user_info(identifier)
             if info:
                 text = fmt_admin_user_summary(info)
-                kb = menu.admin_user_interactive_management(db_id, info['is_active'], panel)
+                kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
                 _safe_edit(uid, msg_id, text, reply_markup=kb)
             else:
-                _safe_edit(uid, msg_id, "خطا در دریافت اطلاعات کاربر.", reply_markup=menu.admin_panel_management_menu(panel))
+                _safe_edit(uid, msg_id, "خطا در دریافت اطلاعات کاربر\\.", reply_markup=menu.admin_panel_management_menu(panel))
+            return
 
-        except (IndexError, ValueError) as e:
-            logger.error(f"Could not parse callback for show result: {data} - Error: {e}")
-            bot.answer_callback_query(call.id, "خطای داخلی در پردازش دکمه بازگشت.", show_alert=True)
-        return
+        # --- Go to Edit Menu ---
+        elif action == "edt":
+            panel = parts[2]
+            identifier = '_'.join(parts[3:])
+            _safe_edit(uid, msg_id, "🔧 *کدام ویژگی را می‌خواهید ویرایش کنید؟*", reply_markup=menu.admin_edit_user_menu(identifier, panel))
+            return
 
-    # --- Reporting and Analytics Navigation ---
+        # --- Ask for Value (e.g., GB or Days) ---
+        elif action == "act":
+            edit_type = parts[2]
+            panel = parts[3]
+            identifier = '_'.join(parts[4:])
+            admin_conversations[uid] = {
+                'edit_type': edit_type, 'panel': panel,
+                'identifier': identifier, 'msg_id': msg_id
+            }
+            _ask_for_new_value(uid, msg_id, edit_type)
+            return
+
+        # --- Toggle Status ---
+        elif action == "tgl":
+            panel_context = parts[2]
+            identifier = '_'.join(parts[3:])
+            info = api_handler.user_info(identifier)
+            if info:
+                bot_user_info = db.get_bot_user_by_uuid(info.get('uuid', ''))
+                is_self_edit = bot_user_info and str(bot_user_info.get('user_id')) == str(uid)
+                new_status = not info.get('is_active', False)
+                h_success = api_handler.modify_user(identifier, data={'is_active': new_status})
+                m_success = marzban_handler.modify_user(info.get('name'), data={'status': 'active' if new_status else 'disabled'})
+                if h_success or m_success:
+                    status_text = "فعال" if new_status else "غیرفعال"
+                    bot.answer_callback_query(call.id, f"✅ وضعیت با موفقیت به '{status_text}' تغییر کرد.")
+                    if not is_self_edit:
+                        new_info = api_handler.user_info(identifier)
+                        if new_info:
+                            _safe_edit(uid, msg_id, fmt_admin_user_summary(new_info), reply_markup=menu.admin_user_interactive_management(identifier, new_info['is_active'], panel_context))
+                else:
+                    bot.answer_callback_query(call.id, "❌ عملیات ناموفق بود.")
+            return
+
+        # --- Reset Birthday ---
+        elif action == "bday":
+            panel_context = parts[2]
+            identifier = '_'.join(parts[3:])
+            user_id_to_reset = db.get_user_id_by_uuid(identifier)
+            if user_id_to_reset:
+                db.reset_user_birthday(user_id_to_reset)
+                bot.answer_callback_query(call.id, "✅ تاریخ تولد کاربر ریست شد.")
+                info = api_handler.user_info(identifier)
+                if info:
+                     _safe_edit(uid, msg_id, fmt_admin_user_summary(info), reply_markup=menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel_context))
+            else:
+                bot.answer_callback_query(call.id, "❌ خطا: این کاربر در دیتابیس ربات نیست یا UUID ندارد.")
+            return
+
+        # --- Go to Reset Usage Menu ---
+        elif action == "rst":
+            panel_context = parts[2]
+            identifier = '_'.join(parts[3:])
+            _safe_edit(uid, msg_id, "⚙️ *مصرف کدام پنل صفر شود؟*", reply_markup=menu.admin_reset_usage_selection_menu(identifier, panel_context))
+            return
+
+        # --- Confirm Reset Usage ---
+        elif action == "crst":
+            panel_to_reset = parts[2]
+            identifier = '_'.join(parts[3:])
+            panel_arg = panel_to_reset if panel_to_reset in ['hiddify', 'marzban'] else None
+            if api_handler.reset_user_usage(identifier, panel=panel_arg):
+                bot.answer_callback_query(call.id, "✅ مصرف کاربر با موفقیت صفر شد.")
+                new_info = api_handler.user_info(identifier)
+                if new_info:
+                    panel_context = 'hiddify'
+                    if 'marzban' in new_info.get('breakdown', {}) and 'hiddify' not in new_info.get('breakdown', {}):
+                        panel_context = 'marzban'
+                    _safe_edit(uid, msg_id, fmt_admin_user_summary(new_info), reply_markup=menu.admin_user_interactive_management(identifier, new_info['is_active'], panel_context))
+            else:
+                bot.answer_callback_query(call.id, "❌ عملیات ناموفق بود یا کاربر در پنل انتخاب شده وجود نداشت.")
+            return
+
+        # --- Go to Delete Confirmation ---
+        elif action == "del":
+            panel_context = parts[2]
+            identifier = '_'.join(parts[3:])
+            _safe_edit(uid, msg_id, f"⚠️ *آیا از حذف کامل کاربر با شناسه زیر اطمینان دارید؟*\n`{escape_markdown(identifier)}`", reply_markup=menu.confirm_delete(identifier))
+            return
+
+        # --- Confirm or Cancel Deletion ---
+        elif action == "cdel" or action == "nodel":
+            identifier = '_'.join(parts[2:])
+            if action == "cdel":
+                _safe_edit(uid, msg_id, "⏳ در حال حذف کامل کاربر...")
+                if api_handler.delete_user(identifier):
+                    db_id = db.get_uuid_id_by_uuid(identifier)
+                    if db_id:
+                        db.deactivate_uuid(db_id)
+                        db.delete_user_snapshots(db_id)
+                    _safe_edit(uid, msg_id, "✅ کاربر با موفقیت حذف شد\\.", reply_markup=menu.admin_management_menu())
+                else:
+                    _safe_edit(uid, msg_id, "❌ خطا در حذف کاربر از پنل\\.", reply_markup=menu.admin_management_menu())
+            elif action == "nodel":
+                info = api_handler.user_info(identifier)
+                if info:
+                    panel_context = 'hiddify'
+                    if 'marzban' in info.get('breakdown', {}) and 'hiddify' not in info.get('breakdown', {}):
+                        panel_context = 'marzban'
+                    _safe_edit(uid, msg_id, fmt_admin_user_summary(info), reply_markup=menu.admin_user_interactive_management(identifier, info['is_active'], panel_context))
+                else:
+                    _safe_edit(uid, msg_id, "عملیات لغو شد\\.", reply_markup=menu.admin_management_menu())
+            return
+
     if data == "admin_select_server_for_reports":
         _safe_edit(uid, msg_id, "لطفاً پنل را برای گزارش‌گیری انتخاب کنید:", reply_markup=menu.admin_server_selection_menu(base_callback="admin_reports_menu"))
         return
@@ -512,95 +570,6 @@ def handle_admin_callbacks(call: types.CallbackQuery):
         except Exception as e:
             logger.exception(f"ADMIN LIST Error for chat {uid}, data: {data}")
             _safe_edit(uid, msg_id, "❌ خطایی در پردازش لیست رخ داد\\.", reply_markup=menu.admin_panel())
-        return
-
-    # --- Direct Actions ---
-    action_prefixes = ["ad_tgl_", "ad_bday_", "ad_rst_", "ad_del_", "ad_cdel_", "ad_nodel_"]
-    if any(data.startswith(prefix) for prefix in action_prefixes):
-        parts = data.split('_')
-        action = parts[1]
-        
-        # --- FIX: This block is now structured to handle db_id from callbacks ---
-        
-        # Retrieve the user's db_id from the callback
-        # It might be in different positions depending on the action
-        try:
-            # For actions like "ad_tgl_hiddify_123", db_id is the last part
-            db_id = int(parts[-1])
-        except (ValueError, IndexError):
-            bot.answer_callback_query(call.id, "خطای داخلی: شناسه کاربر نامعتبر است.", show_alert=True)
-            return
-
-        # Retrieve the full UUID using the db_id
-        # We need the admin's user_id (uid) to ensure they have permission to access this uuid_id
-        uuid_row = db.uuid_by_id(user_id=uid, uuid_id=db_id)
-        # If not found for the admin, maybe it's a general query (less secure, but for simplicity)
-        if not uuid_row:
-            # Fallback for cases where any admin can manage any user
-            uuid_row_obj = db.execute("SELECT uuid FROM user_uuids WHERE id = ?", (db_id,)).fetchone()
-            if uuid_row_obj:
-                uuid_row = {'uuid': uuid_row_obj['uuid']}
-
-        if not uuid_row or 'uuid' not in uuid_row:
-            bot.answer_callback_query(call.id, "خطا: اطلاعات اکانت در دیتابیس یافت نشد.", show_alert=True)
-            return
-            
-        identifier = uuid_row['uuid'] # This is the full UUID needed for API calls
-        panel = parts[2] if len(parts) > 3 else 'hiddify' # Safely get panel
-
-        if action == "tgl":
-            info = api_handler.user_info(identifier)
-            if info:
-                new_status = not info.get('is_active', False)
-                api_handler.modify_user(identifier, data={'is_active': new_status})
-                # Also update Marzban if it's a dual-panel user
-                marzban_handler.modify_user(identifier, data={'status': 'active' if new_status else 'disabled'})
-                
-                bot.answer_callback_query(call.id, f"کاربر {'فعال' if new_status else 'غیرفعال'} شد.")
-                new_info = api_handler.user_info(identifier)
-                if new_info:
-                    _safe_edit(uid, msg_id, fmt_one(new_info, db.get_usage_since_midnight(db_id)), reply_markup=menu.admin_user_interactive_management(db_id, new_info['is_active'], panel))
-            else:
-                bot.answer_callback_query(call.id, "❌ خطا در تغییر وضعیت.")
-
-        elif action == "bday":
-            user_id_to_reset = db.get_user_id_by_uuid(identifier)
-            if user_id_to_reset:
-                db.reset_user_birthday(user_id_to_reset)
-                bot.answer_callback_query(call.id, "✅ تاریخ تولد کاربر ریست شد.")
-                _safe_edit(uid, msg_id, call.message.text + "\n\n*تاریخ تولد کاربر ریست شد.*", reply_markup=call.message.reply_markup)
-            else:
-                bot.answer_callback_query(call.id, "❌ خطا: کاربری برای این UUID یافت نشد.")
-
-        elif action == "rst":
-            if api_handler.reset_user_usage(identifier):
-                bot.answer_callback_query(call.id, "✅ مصرف کاربر صفر شد.")
-                new_info = api_handler.user_info(identifier)
-                if new_info:
-                    _safe_edit(uid, msg_id, fmt_one(new_info, db.get_usage_since_midnight(db_id)), reply_markup=menu.admin_user_interactive_management(db_id, new_info['is_active'], panel))
-            else:
-                bot.answer_callback_query(call.id, "❌ خطا در ریست کردن مصرف.")
-
-        elif action == "del":
-            # Pass the db_id to the confirmation menu
-            _safe_edit(uid, msg_id, f"⚠️ *آیا از حذف کامل کاربر با شناسه زیر اطمینان دارید؟*\n`{escape_markdown(identifier)}`", reply_markup=menu.confirm_delete(db_id))
-
-        elif action == "cdel": # Confirm Delete
-            _safe_edit(uid, msg_id, "⏳ در حال حذف کامل کاربر...")
-            if api_handler.delete_user(identifier):
-                db.deactivate_uuid(db_id) # Deactivate instead of hard delete from user_uuids
-                db.delete_user_snapshots(db_id) # Clean up snapshots
-                _safe_edit(uid, msg_id, "✅ کاربر با موفقیت حذف شد.", reply_markup=menu.admin_management_menu())
-            else:
-                _safe_edit(uid, msg_id, "❌ خطا در حذف کاربر از پنل.", reply_markup=menu.admin_management_menu())
-
-        elif action == "nodel": # Cancel Delete
-            info = api_handler.user_info(identifier)
-            if info:
-                _safe_edit(uid, msg_id, fmt_one(info, db.get_usage_since_midnight(db_id)), reply_markup=menu.admin_user_interactive_management(db_id, info['is_active'], panel))
-            else:
-                _safe_edit(uid, msg_id, "عملیات لغو شد.", reply_markup=menu.admin_management_menu())
-
         return
 
     # --- Other Static Callbacks ---

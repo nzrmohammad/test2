@@ -154,11 +154,11 @@ class Menu:
         return kb
 
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
-        """Shows the main management menu for a user with shortened callbacks."""
+        """Shows the main management menu for a user, using a string identifier."""
         kb = types.InlineKeyboardMarkup(row_width=2)
         status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
         
-        # --- START OF FIX: Shortened callback prefixes ---
+        # Callbacks now use the string identifier (UUID/username)
         kb.add(types.InlineKeyboardButton(status_text, callback_data=f"ad_tgl_{panel}_{identifier}"))
         kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"ad_bday_{panel}_{identifier}"))
         kb.add(
@@ -166,18 +166,16 @@ class Menu:
             types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"ad_del_{panel}_{identifier}")
         )
         kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"ad_edt_{panel}_{identifier}"))
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"ad_mp_{panel}"))
-        # --- END OF FIX ---
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin_manage_panel_{panel}"))
         return kb
 
-    def confirm_delete(self, uuid: str) -> types.InlineKeyboardMarkup:
+    def confirm_delete(self, identifier: str) -> types.InlineKeyboardMarkup:
+        """Confirmation menu for deletion, using a string identifier."""
         kb = types.InlineKeyboardMarkup(row_width=2)
-        # --- START OF FIX: Shortened callback prefixes ---
         kb.add(
-            types.InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"ad_cdel_{uuid}"),
-            types.InlineKeyboardButton("❌ خیر، لغو", callback_data=f"ad_nodel_{uuid}")
+            types.InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"ad_cdel_{identifier}"),
+            types.InlineKeyboardButton("❌ خیر، لغو", callback_data=f"ad_nodel_{identifier}")
         )
-        # --- END OF FIX ---
         return kb
 
     def admin_analytics_menu(self, panel: str) -> types.InlineKeyboardMarkup:
@@ -215,13 +213,13 @@ class Menu:
         kb.add(types.InlineKeyboardButton("🔙 لغو عملیات", callback_data=back_callback))
         return kb
 
-    def admin_edit_user_menu(self, db_id: int, panel: str) -> types.InlineKeyboardMarkup:
+    def admin_edit_user_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"ad_act_addgb_{panel}_{db_id}"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"ad_act_adddays_{panel}_{db_id}")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"ad_act_addgb_{panel}_{identifier}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"ad_act_adddays_{panel}_{identifier}")
         )
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"ad_sr_{panel}_{db_id}"))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"ad_sr_{panel}_{identifier}"))
         return kb
     
     def quick_stats_menu(self, num_accounts: int, current_page: int) -> types.InlineKeyboardMarkup:
@@ -272,6 +270,20 @@ class Menu:
             types.InlineKeyboardButton("📋 لیست کاربران پنل", callback_data=f"admin_list_panel_users_{panel}_0")
         )
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به انتخاب پنل", callback_data="admin_management_menu"))
+        return kb
+
+    def admin_reset_usage_selection_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
+        """Displays a menu to select which panel's usage to reset."""
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        # Callback format: ad_crst_{panel_to_reset}_{identifier}
+        btn_h = types.InlineKeyboardButton("آلمان 🇩🇪", callback_data=f"ad_crst_hiddify_{identifier}")
+        btn_m = types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data=f"ad_crst_marzban_{identifier}")
+        btn_both = types.InlineKeyboardButton("هر دو پنل", callback_data=f"ad_crst_both_{identifier}")
+        # The back button should return to the user management menu
+        btn_back = types.InlineKeyboardButton("🔙 لغو و بازگشت", callback_data=f"ad_sr_{panel}_{identifier}")
+        kb.add(btn_h, btn_m)
+        kb.add(btn_both)
+        kb.add(btn_back)
         return kb
 
 menu = Menu()

@@ -15,7 +15,9 @@ def initialize_marzban_handlers(b_instance, conversations_dict):
 # --- START: ADD NEW CONVERSATION FLOW for Marzban ---
 def _start_add_marzban_user_convo(uid, msg_id):
     admin_conversations[uid] = {'msg_id': msg_id, 'panel': 'marzban'}
-    prompt = "افزودن کاربر به پنل فرانسه (مرزبان) 🇫🇷\n\n1. لطفاً یک **نام کاربری** وارد کنید (حروف انگلیسی، اعداد و آندرلاین):"
+    # --- START OF FIX ---
+    prompt = "افزودن کاربر به پنل فرانسه \\(مرزبان\\) 🇫🇷\n\n1. لطفاً یک **نام کاربری** وارد کنید \\(حروف انگلیسی، اعداد و آندرلاین\\):"
+    # --- END OF FIX ---
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
     bot.register_next_step_handler_by_chat_id(uid, _get_name_for_add_marzban_user)
 
@@ -28,7 +30,7 @@ def _get_name_for_add_marzban_user(msg: types.Message):
         
     msg_id = admin_conversations[uid].get('msg_id')
     admin_conversations[uid]['username'] = name
-    prompt = f"نام کاربری: `{name}`\n\n2. حالا **حجم کل مصرف** (به گیگابایت) را وارد کنید (عدد `0` برای نامحدود):"
+    prompt = f"نام کاربری: `{name}`\n\n2. حالا **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
     bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_marzban_user)
 
@@ -44,7 +46,7 @@ def _get_limit_for_add_marzban_user(msg: types.Message):
         limit = float(limit_text)
         admin_conversations[uid]['usage_limit_GB'] = limit
         name = admin_conversations[uid]['username']
-        prompt = f"نام کاربری: `{name}`, حجم: `{limit} GB`\n\n3. در نهایت، **مدت زمان** پلن (به روز) را وارد کنید (عدد `0` برای نامحدود):"
+        prompt = f"نام کاربری: `{name}`, حجم: `{limit} GB`\n\n3. در نهایت، **مدت زمان** پلن \\(به روز\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_marzban_user)
     except (ValueError, TypeError):

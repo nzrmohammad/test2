@@ -1,3 +1,5 @@
+# api_handler.py
+
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
@@ -30,64 +32,6 @@ class HiddifyAPIHandler:
         session.mount('http://', adapter)
         session.mount('https://', adapter)
         return session
-
-    # --- START: ADD THE NEW SMART user_info FUNCTION ---
-    def user_info(self, identifier: str) -> Optional[Dict[str, Any]]:
-        """
-        Smartly fetches user info. If identifier is a UUID, it checks both panels.
-        If it's not a UUID, it assumes it's a Marzban username.
-        """
-        # Case 1: Identifier is a Marzban username (not in UUID format)
-        if not validate_uuid(identifier):
-            marzban_info = marzban_handler.get_user_by_username(identifier)
-            if marzban_info:
-                # Create a breakdown for consistency
-                marzban_info['breakdown'] = {
-                    'marzban': {
-                        'usage': marzban_info.get('current_usage_GB', 0),
-                        'limit': marzban_info.get('usage_limit_GB', 0)
-                    }
-                }
-            return marzban_info
-
-        # Case 2: Identifier is a valid UUID, check both panels
-        uuid = identifier
-        hiddify_raw_data = self._request("GET", f"/user/{uuid}/")
-        marzban_info = marzban_handler.get_user_info(uuid)
-
-        # User exists only in Hiddify
-        if hiddify_raw_data and not marzban_info:
-            h_info = self._norm(hiddify_raw_data)
-            if h_info:
-                h_info['breakdown'] = {'hiddify': {'usage': h_info['current_usage_GB'], 'limit': h_info['usage_limit_GB']}}
-            return h_info
-            
-        # User exists only in Marzban (and has a mapped UUID)
-        if not hiddify_raw_data and marzban_info:
-            marzban_info['breakdown'] = {'marzban': {'usage': marzban_info['current_usage_GB'], 'limit': marzban_info['usage_limit_GB']}}
-            return marzban_info
-
-        # User exists in both panels
-        if hiddify_raw_data and marzban_info:
-            hiddify_info = self._norm(hiddify_raw_data)
-            if not hiddify_info: return None
-
-            hiddify_info['breakdown'] = {
-                'hiddify': {'usage': hiddify_info['current_usage_GB'], 'limit': hiddify_info['usage_limit_GB']},
-                'marzban': {'usage': marzban_info['current_usage_GB'], 'limit': marzban_info['usage_limit_GB']}
-            }
-            # Combine total stats
-            total_limit = hiddify_info['usage_limit_GB'] + marzban_info['usage_limit_GB']
-            total_usage = hiddify_info['current_usage_GB'] + marzban_info['current_usage_GB']
-            hiddify_info['usage_limit_GB'] = total_limit
-            hiddify_info['current_usage_GB'] = total_usage
-            hiddify_info['remaining_GB'] = max(0, total_limit - total_usage)
-            hiddify_info['usage_percentage'] = (total_usage / total_limit * 100) if total_limit > 0 else 0
-            return hiddify_info
-
-        # User not found anywhere
-        return None
-    # --- END: ADD THE NEW SMART user_info FUNCTION ---
 
     def _parse_api_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
         if not date_str or date_str.startswith('0001-01-01'):
@@ -168,34 +112,75 @@ class HiddifyAPIHandler:
                 all_users.append(combined_info)
         return all_users
 
-    def user_info(self, uuid: str) -> Optional[Dict[str, Any]]:
+    def user_info(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """
+        Smartly fetches user info from Hiddify and/or Marzban.
+        - If the identifier is a username (not UUID format), it queries Marzban only.
+        - If the identifier is a UUID, it queries both Hiddify and Marzban and combines the results.
+        """
+        # Case 1: Identifier is a Marzban username (not in UUID format)
+        if not validate_uuid(identifier):
+            marzban_info = marzban_handler.get_user_by_username(identifier)
+            if marzban_info:
+                # Add a breakdown structure for consistency with combined users
+                marzban_info['breakdown'] = {
+                    'marzban': {
+                        'usage': marzban_info.get('current_usage_GB', 0),
+                        'limit': marzban_info.get('usage_limit_GB', 0),
+                        'last_online': marzban_info.get('last_online')
+                    }
+                }
+            return marzban_info
+
+        # Case 2: Identifier is a valid UUID, check both panels
+        uuid = identifier
         hiddify_raw_data = self._request("GET", f"/user/{uuid}/")
         marzban_info = marzban_handler.get_user_info(uuid)
 
-        # Case 1: User exists only in Hiddify
+        # User exists only in Hiddify
         if hiddify_raw_data and not marzban_info:
             h_info = self._norm(hiddify_raw_data)
             if h_info:
-                h_info['breakdown'] = {'hiddify': {'usage': h_info['current_usage_GB'], 'limit': h_info['usage_limit_GB'], 'last_online': h_info.get('last_online')}}
+                h_info['breakdown'] = {
+                    'hiddify': {
+                        'usage': h_info['current_usage_GB'],
+                        'limit': h_info['usage_limit_GB'],
+                        'last_online': h_info.get('last_online')
+                    }
+                }
             return h_info
-
-        # Case 2: User exists only in Marzban
+            
+        # User exists only in Marzban (and has a mapped UUID)
         if not hiddify_raw_data and marzban_info:
-            marzban_info['breakdown'] = {'marzban': {'usage': marzban_info['current_usage_GB'], 'limit': marzban_info['usage_limit_GB'], 'last_online': marzban_info.get('last_online')}}
+            marzban_info['breakdown'] = {
+                'marzban': {
+                    'usage': marzban_info['current_usage_GB'],
+                    'limit': marzban_info['usage_limit_GB'],
+                    'last_online': marzban_info.get('last_online')
+                }
+            }
             return marzban_info
 
-        # Case 3: User exists in both panels
+        # User exists in both panels
         if hiddify_raw_data and marzban_info:
             hiddify_info = self._norm(hiddify_raw_data)
             if not hiddify_info: return None # Safety check
 
             # Add breakdown for both
             hiddify_info['breakdown'] = {
-                'hiddify': {'usage': hiddify_info['current_usage_GB'], 'limit': hiddify_info['usage_limit_GB'], 'last_online': hiddify_info.get('last_online')},
-                'marzban': {'usage': marzban_info['current_usage_GB'], 'limit': marzban_info['usage_limit_GB'], 'last_online': marzban_info.get('last_online')}
+                'hiddify': {
+                    'usage': hiddify_info['current_usage_GB'],
+                    'limit': hiddify_info['usage_limit_GB'],
+                    'last_online': hiddify_info.get('last_online')
+                },
+                'marzban': {
+                    'usage': marzban_info['current_usage_GB'],
+                    'limit': marzban_info['usage_limit_GB'],
+                    'last_online': marzban_info.get('last_online')
+                }
             }
             
-            # Combine stats
+            # Combine total stats
             total_limit = hiddify_info['usage_limit_GB'] + marzban_info['usage_limit_GB']
             total_usage = hiddify_info['current_usage_GB'] + marzban_info['current_usage_GB']
             
@@ -204,6 +189,7 @@ class HiddifyAPIHandler:
             hiddify_info['remaining_GB'] = max(0, total_limit - total_usage)
             hiddify_info['usage_percentage'] = (total_usage / total_limit * 100) if total_limit > 0 else 0
             
+            # Determine the most recent last_online time
             h_online = hiddify_info.get('last_online')
             m_online = marzban_info.get('last_online')
             if m_online and (not h_online or m_online > h_online):
@@ -295,12 +281,45 @@ class HiddifyAPIHandler:
         
         return self._request("PATCH", f"/user/{uuid}/", json=payload) is not None
 
-    def delete_user(self, uuid: str) -> bool:
-        return self._request("DELETE", f"/user/{uuid}/") is True
+    def delete_user(self, identifier: str) -> bool:
+            """Deletes a user from Hiddify and/or Marzban based on their info."""
+            info = self.user_info(identifier)
+            if not info:
+                logger.warning(f"Delete failed: Could not find user info for '{identifier}'")
+                return False
 
-    def reset_user_usage(self, uuid: str) -> bool:
-        return self.modify_user(uuid, {"current_usage_GB": 0})
-    
+            hiddify_success, marzban_success = True, True # Assume success if not present
 
+            # Delete from Hiddify if present
+            if 'hiddify' in info.get('breakdown', {}):
+                hiddify_success = self._request("DELETE", f"/user/{info['uuid']}/") is True
+
+            # Delete from Marzban if present
+            if 'marzban' in info.get('breakdown', {}):
+                marzban_username = info.get('name') # In Marzban, name is the username
+                marzban_success = marzban_handler.delete_user(marzban_username)
+
+            return hiddify_success and marzban_success
+
+    def reset_user_usage(self, identifier: str, panel: str | None = None) -> bool:
+        """
+        Resets user usage on a specific panel ('hiddify', 'marzban') or both if panel is None.
+        """
+        info = self.user_info(identifier)
+        if not info:
+            logger.warning(f"Reset failed: Could not find user info for '{identifier}'")
+            return False
+
+        h_success, m_success = True, True
+
+        # Reset Hiddify if requested (or if resetting both)
+        if panel in ['hiddify', None] and 'hiddify' in info.get('breakdown', {}):
+            h_success = self._request("PATCH", f"/user/{info['uuid']}/", json={"current_usage_GB": 0}) is not None
+
+        # Reset Marzban if requested (or if resetting both)
+        if panel in ['marzban', None] and 'marzban' in info.get('breakdown', {}):
+            m_success = marzban_handler.reset_user_usage(info.get('name'))
+
+        return h_success and m_success
 
 api_handler = HiddifyAPIHandler()

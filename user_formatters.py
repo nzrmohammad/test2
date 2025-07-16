@@ -150,13 +150,16 @@ def fmt_user_report(user_infos: list) -> str:
     if not user_infos:
         return "شما اکانت فعالی برای گزارش‌گیری ندارید."
     
-    total_daily = 0.0
+    total_daily_hiddify, total_daily_marzban = 0.0, 0.0
     accounts_details = []
     
     for info in user_infos:
         daily_usage_dict = db.get_usage_since_midnight(info['db_id'])
-        daily_usage_sum = sum(daily_usage_dict.values())
-        total_daily += daily_usage_sum
+        h_daily = daily_usage_dict.get('hiddify', 0.0)
+        m_daily = daily_usage_dict.get('marzban', 0.0)
+        
+        total_daily_hiddify += h_daily
+        total_daily_marzban += m_daily
         
         name = escape_markdown(info.get("name", "کاربر ناشناس"))
         usage_str = f"`{escape_markdown(f'{info.get("current_usage_GB", 0):.2f}')} GB / {escape_markdown(f'{info.get("usage_limit_GB", 0):.2f}')} GB`"
@@ -166,21 +169,34 @@ def fmt_user_report(user_infos: list) -> str:
         if expire_days is not None:
             expire_str = f"`{expire_days} روز`" if expire_days >= 0 else "`منقضی شده`"
         
-        daily_usage_str = f"`{escape_markdown(format_daily_usage(daily_usage_sum))}`"
+        # بخش جدید برای نمایش تفکیک مصرف روزانه
+        daily_breakdown = []
+        if 'hiddify' in info.get('breakdown', {}):
+            daily_breakdown.append(f"`  `🇩🇪 *مصرف امروز آلمان:* `{escape_markdown(format_daily_usage(h_daily))}`")
+        if 'marzban' in info.get('breakdown', {}):
+            daily_breakdown.append(f"`  `🇫🇷 *مصرف امروز فرانسه:* `{escape_markdown(format_daily_usage(m_daily))}`")
             
         accounts_details.append(
             f"{EMOJIS['user']} *اکانت: {name}*\n"
             f"`  `{EMOJIS['chart']} *مصرف کل:* {usage_str}\n"
-            f"`  `{EMOJIS['lightning']} *مصرف امروز:* {daily_usage_str}\n"
-            f"`  `{EMOJIS['calendar']} *انقضا:* {expire_str}"
+            + "\n".join(daily_breakdown) +
+            f"\n`  `{EMOJIS['calendar']} *انقضا:* {expire_str}"
         )
 
     if not accounts_details:
         return "اطلاعات هیچ یک از اکانت‌های شما دریافت نشد."
     
     report_body = "\n\n".join(accounts_details)
-    total_daily_str = escape_markdown(format_daily_usage(total_daily))
-    return f"{report_body}\n\n{EMOJIS['lightning']} *مجموع مصرف امروز شما:* `{total_daily_str}`"
+    total_daily_all = total_daily_hiddify + total_daily_marzban
+    
+    # بخش جدید برای نمایش مجموع مصرف روزانه به تفکیک
+    footer = [
+        f"\n{EMOJIS['lightning']} *مجموع کل مصرف امروز شما:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
+        f"`  `🇩🇪 مجموع آلمان: `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
+        f"`  `🇫🇷 مجموع فرانسه: `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
+    ]
+    
+    return f"{report_body}\n\n" + "\n".join(footer)
 
 def fmt_service_plans() -> str:
     """
