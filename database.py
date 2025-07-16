@@ -95,21 +95,28 @@ class DatabaseManager:
             )
 
     def get_usage_since_midnight(self, uuid_id: int) -> Dict[str, float]:
+        """Calculates daily usage for both panels with a single optimized query."""
         tehran_tz = pytz.timezone("Asia/Tehran")
         today_midnight_tehran = datetime.now(tehran_tz).replace(hour=0, minute=0, second=0, microsecond=0)
         today_midnight_utc = today_midnight_tehran.astimezone(pytz.utc)
-
+        
         result = {'hiddify': 0.0, 'marzban': 0.0}
 
         with self._conn() as c:
+            # *** This is the new, optimized query ***
             query = """
-                SELECT
-                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as h_end,
-                    (SELECT hiddify_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as h_start,
-                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at DESC LIMIT 1) as m_end,
-                    (SELECT marzban_usage_gb FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ? ORDER BY taken_at ASC LIMIT 1) as m_start
+                WITH SnapshotsToday AS (
+                    SELECT hiddify_usage_gb, marzban_usage_gb, taken_at
+                    FROM usage_snapshots
+                    WHERE uuid_id = ? AND taken_at >= ?
+                )
+                SELECT 
+                    (SELECT hiddify_usage_gb FROM SnapshotsToday ORDER BY taken_at DESC LIMIT 1) as h_end,
+                    (SELECT hiddify_usage_gb FROM SnapshotsToday ORDER BY taken_at ASC LIMIT 1) as h_start,
+                    (SELECT marzban_usage_gb FROM SnapshotsToday ORDER BY taken_at DESC LIMIT 1) as m_end,
+                    (SELECT marzban_usage_gb FROM SnapshotsToday ORDER BY taken_at ASC LIMIT 1) as m_start;
             """
-            params = (uuid_id, today_midnight_utc) * 4
+            params = (uuid_id, today_midnight_utc)
             row = c.execute(query, params).fetchone()
 
             if row:
@@ -117,7 +124,6 @@ class DatabaseManager:
                     result['hiddify'] = max(0, row['h_end'] - row['h_start'])
                 if row['m_start'] is not None and row['m_end'] is not None:
                     result['marzban'] = max(0, row['m_end'] - row['m_start'])
-
         return result
     
     def get_panel_usage_in_intervals(self, uuid_id: int, panel_name: str) -> Dict[int, float]:
@@ -175,10 +181,12 @@ class DatabaseManager:
             return row['id'] if row else None
 
     def get_usage_since_midnight_by_uuid(self, uuid_str: str) -> Dict[str, float]:
+        """Convenience function to get daily usage directly by UUID string."""
         uuid_id = self.get_uuid_id_by_uuid(uuid_str)
         if uuid_id:
             return self.get_usage_since_midnight(uuid_id)
         return {'hiddify': 0.0, 'marzban': 0.0}
+
 
     def add_or_update_scheduled_message(self, job_type: str, chat_id: int, message_id: int):
         with self._conn() as c:

@@ -183,18 +183,15 @@ def _handle_global_search_response(message: types.Message):
         return
 
     if len(results) == 1:
-        # اگر فقط یک نتیجه بود، مستقیم به صفحه مدیریت کاربر برو
         user = results[0]
         panel = user['panel']
         identifier = user.get('uuid') or user.get('name')
-        # برای نمایش اطلاعات کامل، از api_handler مربوطه استفاده می‌کنیم
         info = combined_handler.user_info(identifier) if panel == 'hiddify' else combined_handler.get_user_by_username(identifier)
         if info:
             text = fmt_admin_user_summary(info)
             kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
             _safe_edit(uid, original_msg_id, text, reply_markup=kb)
     else:
-        # اگر نتایج متعدد بود، لیست آن‌ها را نمایش بده
         kb = types.InlineKeyboardMarkup()
         for user in results:
             panel_emoji = "🇩🇪" if user['panel'] == 'hiddify' else "🇫🇷"

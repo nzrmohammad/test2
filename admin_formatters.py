@@ -2,13 +2,26 @@ import pytz
 from datetime import datetime, timedelta
 from config import EMOJIS, PAGE_SIZE
 from database import db
-from api_handler2 import api_handler
 import jdatetime
 from utils import (
     persian_date,
     format_daily_usage, escape_markdown,
     format_relative_time, validate_uuid 
 )
+
+def format_shamsi_tehran(dt_obj: datetime | None) -> str:
+    if not dt_obj:
+        return "N/A"
+    
+    if dt_obj.tzinfo is None:
+        dt_obj = pytz.utc.localize(dt_obj)
+
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    tehran_dt = dt_obj.astimezone(tehran_tz)
+    
+    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
+    
+    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"
 
 def fmt_users_list(users: list, list_type: str, page: int) -> str:
     title_map = {
@@ -117,7 +130,6 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
         total_daily_marzban += daily_usage_dict.get('marzban', 0.0)
         
         if user_info.get('is_active') and user_info.get('last_online') and user_info['last_online'].astimezone(pytz.utc) >= online_deadline:
-            # افزودن مصرف روزانه به اطلاعات کاربر آنلاین برای استفاده در ادامه
             user_info['daily_usage_dict'] = daily_usage_dict
             online_users.append(user_info)
 
@@ -338,11 +350,8 @@ def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
 
-# در فایل admin_formatters.py این تابع را به طور کامل جایگزین کنید
 
-# این تابع را در فایل admin_formatters.py به طور کامل جایگزین کنید
 def fmt_admin_user_summary(info: dict) -> str:
-    """Formats a user summary for the admin, ensuring all values are properly escaped for MarkdownV2."""
     if not info:
         return "❌ خطا در دریافت اطلاعات کاربر\\."
 
@@ -376,15 +385,13 @@ def fmt_admin_user_summary(info: dict) -> str:
         h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0)))
         h_last_online_str = format_shamsi_tehran(h_info.get('last_online'))
         
-        # FIX: The missing comma after this line is now added.
         breakdown_lines.extend([
             "\nآلمان 🇩🇪",
             f"🗂️ مجموع حجم : `{h_limit_str} GB`",
             f"🔥 مجموع مصرف شده : `{h_usage_str} GB`",
-            f"⚡️ مصرف امروز : `{h_daily_str}`",  # <<<<<<< این ویرگول فراموش شده بود
+            f"⚡️ مصرف امروز : `{h_daily_str}`",
             f"⏰ آخرین اتصال : `{h_last_online_str}`"
         ])
-
     if m_info:
         m_limit_str = escape_markdown(f"{m_info.get('limit', 0):.2f}")
         m_usage_str = escape_markdown(f"{m_info.get('usage', 0):.2f}")
@@ -428,19 +435,3 @@ def fmt_admin_user_summary(info: dict) -> str:
     return "\n".join(report_parts)
 
 
-
-
-def format_shamsi_tehran(dt_obj):
-
-    if not dt_obj:
-        return "N/A"
-    
-    if dt_obj.tzinfo is None:
-        dt_obj = pytz.utc.localize(dt_obj)
-
-    tehran_tz = pytz.timezone('Asia/Tehran')
-    tehran_dt = dt_obj.astimezone(tehran_tz)
-    
-    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
-    
-    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"

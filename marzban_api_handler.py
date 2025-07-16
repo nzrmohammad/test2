@@ -15,36 +15,65 @@ class MarzbanAPIHandler:
         self.username = MARZBAN_API_USERNAME
         self.password = MARZBAN_API_PASSWORD
         self.access_token = self._get_access_token()
-        self.uuid_map = self._load_uuid_map()
+        self.uuid_to_username_map, self.username_to_uuid_map = self._load_uuid_maps()
         self.utc_tz = pytz.utc
 
-# در فایل marzban_api_handler.py
-def _load_uuid_map(self):
-    """Loads the uuid_to_marzban_user.json file and creates both forward and reverse maps."""
-    try:
-        with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            self.username_to_uuid_map = {v: k for k, v in data.items()}
-            return data
-    except (FileNotFoundError, json.JSONDecodeError):
-        logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
-        self.username_to_uuid_map = {}
-        return {}
-
-    def _get_access_token(self):
-        """Fetches the access token from Marzban panel."""
+    def _load_uuid_maps(self):
         try:
-            url = f"{self.base_url}/api/admin/token"
+            with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                uuid_map = data
+                username_map = {v: k for k, v in data.items()}
+                return uuid_map, username_map
+        except (FileNotFoundError, json.JSONDecodeError):
+            logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
+            return {}, {}
+
+    def _get_access_token(self) -> bool:
+        """Fetches and sets the access token. Returns True on success, False on failure."""
+        try:
+            url = f"{self.api_base_url}/admin/token"
             data = {"username": self.username, "password": self.password}
             response = requests.post(url, data=data, timeout=API_TIMEOUT)
             response.raise_for_status()
-            return response.json().get("access_token")
+            self.access_token = response.json().get("access_token")
+            if self.access_token:
+                logger.info("Marzban: Successfully obtained new access token.")
+                return True
+            return False
         except requests.exceptions.RequestException as e:
             logger.error(f"Marzban: Failed to get access token: {e}")
+            self.access_token = None
+            return False
+        
+    def _request(self, method, endpoint, retry=True, **kwargs):
+        """A central request function with automatic token refresh."""
+        if not self.access_token:
+            if not self._get_access_token():
+                return None # Failed to get token, can't proceed
+
+        url = f"{self.api_base_url}/{endpoint.strip('/')}"
+        headers = {"Authorization": f"Bearer {self.access_token}", "Accept": "application/json"}
+        kwargs['headers'] = headers
+        
+        try:
+            response = requests.request(method, url, timeout=API_TIMEOUT, **kwargs)
+            if response.status_code == 401 and retry:
+                logger.warning("Marzban: Access token expired or invalid. Retrying to get a new one.")
+                if self._get_access_token():
+                    return self._request(method, endpoint, retry=False, **kwargs)
+
+            response.raise_for_status()
+            
+            if response.status_code == 204: # No Content
+                return True
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Marzban API request failed: {method} {url} - {e}")
             return None
 
     def add_user(self, user_data: dict) -> dict | None:
-        """Adds a new user to the Marzban panel."""
         if not self.access_token:
             return None
         
@@ -72,7 +101,6 @@ def _load_uuid_map(self):
             return None
 
     def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
-        """Modifies an existing Marzban user by username."""
         if not self.access_token:
             return False
 
@@ -136,10 +164,6 @@ def _load_uuid_map(self):
         return self.get_user_by_username(marzban_username)
 
     def get_all_users(self) -> list[dict]:
-        """
-        Fetches all users from the Marzban panel and returns their full,
-        normalized data.
-        """
         if not self.access_token:
             return []
         try:

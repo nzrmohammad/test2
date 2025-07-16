@@ -1,7 +1,7 @@
 import pytz
 from config import EMOJIS, PAGE_SIZE
 from database import db
-from api_handler2 import api_handler
+from combined_handler import api_handler
 import jdatetime
 from datetime import datetime
 from utils import (
