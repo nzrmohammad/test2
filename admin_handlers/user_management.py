@@ -19,21 +19,17 @@ def initialize_user_management_handlers(b, conv_dict):
 
 
 def handle_show_user_summary(call, params):
-    # **تغییر اصلی: دیکشنری برای تبدیل مقادیر کوتاه شده به حالت اصلی**
     panel_map = {'h': 'hiddify', 'm': 'marzban'}
     back_map = {'mgt': 'management_menu'}
 
-    # **تغییر اصلی: خواندن پارامترهای جدید و کوتاه‌شده**
     panel_short = params[0]
     identifier = params[1]
-    panel = panel_map.get(panel_short, 'hiddify')  # تبدیل 'h' به 'hiddify' و 'm' به 'marzban'
+    panel = panel_map.get(panel_short, 'hiddify')
 
     back_callback = None
-    if len(params) > 2:
-        back_key_short = params[2]
-        back_key_full = back_map.get(back_key_short) # تبدیل 'mgt' به 'management_menu'
-        if back_key_full:
-            back_callback = f"admin:{back_key_full}"
+    
+    if len(params) > 2 and params[2] in back_map:
+        back_callback = f"admin:{back_map[params[2]]}"
     
     info = combined_handler.get_combined_user_info(identifier)
     if info:
@@ -166,7 +162,7 @@ def handle_reset_usage_action(call, params):
     
     if h_success and m_success:
         if uuid_id_in_db:
-            db.delete_daily_snapshots(uuid_id_in_db)
+            db.delete_user_snapshots(uuid_id_in_db)
             db.add_usage_snapshot(uuid_id_in_db, 0.0, 0.0)
             
         new_info = combined_handler.get_combined_user_info(identifier)

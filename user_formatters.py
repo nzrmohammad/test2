@@ -218,4 +218,6 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
         usage_str = format_daily_usage(usage_gb)
         lines.append(f"`• {hours}` ساعت گذشته: `{escape_markdown(usage_str)}`")
         
+    lines.append("\n*نکته:* این آمار تجمعی است\\. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد\\.")
+        
     return "\n".join(lines)
