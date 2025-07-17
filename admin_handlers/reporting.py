@@ -50,7 +50,13 @@ def handle_marzban_system_stats(call, params):
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def handle_paginated_list(call, params):
+    # --- UX IMPROVEMENT: Show a loading message before slow API calls ---
     list_type, panel, page = params[0], params[1] if len(params) > 2 else None, int(params[-1])
+    
+    # Show loading message only for panel-related lists that require an API call
+    if panel:
+        _safe_edit(call.from_user.id, call.message.message_id, "⏳ در حال دریافت اطلاعات از پنل، لطفاً صبر کنید...", reply_markup=None, parse_mode=None)
+
     users, all_panel_users = [], []
     if panel == 'hiddify': all_panel_users = hiddify_handler.get_all_users()
     elif panel == 'marzban': all_panel_users = marzban_handler.get_all_users()

@@ -1,6 +1,8 @@
 from telebot import types
 from menu import menu
 from hiddify_api_handler import hiddify_handler
+import combined_handler
+from admin_formatters import fmt_admin_user_summary
 from user_formatters import fmt_one
 from utils import _safe_edit, escape_markdown
 import logging
@@ -138,10 +140,11 @@ def _finish_user_creation(uid, msg_id, mode):
     _safe_edit(uid, msg_id, wait_msg_text)
 
     new_user_info = hiddify_handler.add_user(user_data)
-    if new_user_info:
-        report = fmt_one(new_user_info, {})
-        uuid_escaped = escape_markdown(new_user_info.get('uuid', 'N/A'))
-        success_text = f"✅ کاربر با موفقیت ساخته شد\\.\n\n{report}\n\n`{uuid_escaped}`"
+    if new_user_info and new_user_info.get('uuid'):
+        # FIX: Use the combined handler to get a clean, single-panel report
+        final_info = combined_handler.get_combined_user_info(new_user_info['uuid'])
+        text = fmt_admin_user_summary(final_info)
+        success_text = f"✅ کاربر با موفقیت ساخته شد\\.\n\n{text}"
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('hiddify'))
     else:
         err_msg = "❌ خطا در ساخت کاربر. ممکن است نام تکراری باشد یا پنل در دسترس نباشد."

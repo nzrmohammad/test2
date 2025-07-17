@@ -157,25 +157,26 @@ class Menu:
 
 
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        
-        p = panel[0]
-        
-        status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
-        kb.add(types.InlineKeyboardButton(status_text, callback_data=f"adm:tgl:{p}:{identifier}"))
-        
-        kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"adm:rbd:{p}:{identifier}"))
-        
-        kb.add(
-            types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"adm:rusg:{p}:{identifier}"),
-            types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"adm:del_cfm:{p}:{identifier}")
-        )
-        
-        kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"adm:edt:{p}:{identifier}"))
-        
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin:manage_panel:{panel}"))
-        
-        return kb
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            
+            # FIX: Changed callback prefix from "adm:" to "admin:" to match the router.
+            p_identifier = f"{panel}:{identifier}" # Create a combined identifier for simplicity
+
+            status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
+            kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{p_identifier}"))
+            
+            kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rbd:{p_identifier}"))
+            
+            kb.add(
+                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{p_identifier}"),
+                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{p_identifier}")
+            )
+            
+            kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{p_identifier}"))
+            
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin:manage_panel:{panel}"))
+            
+            return kb
 
     def admin_analytics_menu(self, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=1)

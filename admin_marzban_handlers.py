@@ -3,6 +3,9 @@ from menu import menu
 from marzban_api_handler import marzban_handler
 from utils import _safe_edit, escape_markdown
 import logging
+from admin_formatters import fmt_admin_user_summary
+import combined_handler
+
 
 logger = logging.getLogger(__name__)
 bot = None
@@ -35,12 +38,20 @@ def _get_name_for_add_marzban_user(msg: types.Message):
             _safe_edit(uid, admin_conversations[uid]['msg_id'], "عملیات ساخت کاربر لغو شد.", reply_markup=menu.admin_panel_management_menu('marzban'))
             return
 
+        # FIX: Add validation for username length to prevent 422 error
+        if len(name) < 3:
+            bot.send_message(uid, "❌ نام کاربری باید حداقل ۳ کاراکتر باشد. لطفاً نام دیگری وارد کنید.")
+            bot.register_next_step_handler_by_chat_id(uid, _get_name_for_add_marzban_user)
+            # We don't pop the conversation here, so the user can retry.
+            return
+
         msg_id = admin_conversations[uid].get('msg_id')
         admin_conversations[uid]['username'] = name
         prompt = f"نام کاربری: `{escape_markdown(name)}`\n\n2\\. حالا **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
-        _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin_manage_panel_marzban"))
+        _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:manage_panel:marzban"))
         bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_marzban_user)
     finally:
+        # Cleanup only if the operation is canceled
         if name.startswith('/'):
             admin_conversations.pop(uid, None)
 
@@ -101,15 +112,16 @@ def _finish_marzban_user_creation(uid, msg_id):
         return
 
     username_escaped = escape_markdown(user_data.get('username', ''))
-    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\n\\> نام کاربری: `{username_escaped}`"
+    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\\> نام کاربری: `{username_escaped}`"
     _safe_edit(uid, msg_id, wait_msg)
     
     new_user_info = marzban_handler.add_user(user_data)
     
     if new_user_info and new_user_info.get('username'):
-        username_created = escape_markdown(new_user_info['username'])
-        # FIX: Use a simpler, dedicated success message
-        success_text = f"✅ کاربر `{username_created}` با موفقیت در پنل فرانسه ساخته شد\\."
+        # FIX: Use the combined handler to get a clean, single-panel report
+        final_info = combined_handler.get_combined_user_info(new_user_info['username'])
+        text = fmt_admin_user_summary(final_info)
+        success_text = f"✅ کاربر با موفقیت ساخته شد\\.\n\n{text}"
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('marzban'))
     else:
         err_msg = "❌ خطا در ساخت کاربر. ممکن است نام تکراری باشد یا پنل در دسترس نباشد."

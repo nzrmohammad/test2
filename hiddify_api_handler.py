@@ -57,30 +57,25 @@ class HiddifyAPIHandler:
             return (expiration_date - start_date).days
 
     def _norm(self, raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not isinstance(raw, dict): return None
-        # *** ADDING LOG ***
-        logger.info(f"[HIDDIFY_RAW_DATA] Raw user data for {raw.get('name')}: {raw}")
-        
-        usage_limit = safe_float(raw.get("usage_limit_GB", 0))
-        current_usage = safe_float(raw.get("current_usage_GB", 0))
-        
-        normalized_data = {
-            "name": raw.get("name") or "کاربر ناشناس",
-            "uuid": raw.get("uuid", "").lower(),
-            "is_active": bool(raw.get("enable", False)),
-            "last_online": self._parse_api_datetime(raw.get("last_online")),
-            "usage_limit_GB": usage_limit,
-            "current_usage_GB": current_usage,
-            "remaining_GB": max(0, usage_limit - current_usage),
-            "usage_percentage": (current_usage / usage_limit * 100) if usage_limit > 0 else 0,
-            "expire": self._calculate_remaining_days(raw.get("start_date"), raw.get("package_days")),
-            "mode": raw.get("mode", "no_reset")
-        }
-        # *** ADDING LOG ***
-        logger.info(f"[HIDDIFY_NORMALIZED_DATA] Normalized user data: {normalized_data}")
-        return normalized_data
+            if not isinstance(raw, dict): return None
+            
+            usage_limit = safe_float(raw.get("usage_limit_GB", 0))
+            current_usage = safe_float(raw.get("current_usage_GB", 0))
+            
+            normalized_data = {
+                "name": raw.get("name") or "کاربر ناشناس",
+                "uuid": raw.get("uuid", "").lower(),
+                "is_active": bool(raw.get("enable", False)),
+                "last_online": self._parse_api_datetime(raw.get("last_online")),
+                "usage_limit_GB": usage_limit,
+                "current_usage_GB": current_usage,
+                "remaining_GB": max(0, usage_limit - current_usage),
+                "usage_percentage": (current_usage / usage_limit * 100) if usage_limit > 0 else 0,
+                "expire": self._calculate_remaining_days(raw.get("start_date"), raw.get("package_days")),
+                "mode": raw.get("mode", "no_reset")
+            }
+            return normalized_data
 
-    # ... (get_all_users, user_info, etc. remain the same) ...
     @cached(api_cache)
     def get_all_users(self) -> List[Dict[str, Any]]:
         """فقط کاربران پنل Hiddify را برمیگرداند."""

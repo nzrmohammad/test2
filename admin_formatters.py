@@ -4,7 +4,7 @@ from config import EMOJIS, PAGE_SIZE
 from database import db
 from utils import (
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid , format_raw_datetime
+    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar
 )
 
 # This function was not used and removed to avoid confusion.
@@ -234,15 +234,15 @@ def fmt_bot_users_list(bot_users: list, page: int) -> str:
 def fmt_birthdays_list(users: list, page: int) -> str:
     title = "لیست تولد کاربران"
     if not users:
-        return f"🎂 *{escape_markdown(title)}*\n\nهیچ کاربری تاریخ تولد خود را ثبت نکرده است."
+        return f"🎂 *{escape_markdown(title)}*\n\nهیچ کاربری تاریخ تولد خود را ثبت نکرده است\\."
     
     title_text = f"{title} (مرتب شده بر اساس ماه)"
     header_text = f"🎂 *{escape_markdown(title_text)}*"
 
     if len(users) > PAGE_SIZE:
         total_pages = (len(users) + PAGE_SIZE - 1) // PAGE_SIZE
-        pagination_text = f"(صفحه {page + 1} از {total_pages} | کل: {len(users)})"
-        header_text += f"\n{escape_markdown(pagination_text)}"
+        pagination_text = f"\\(صفحه {page + 1} از {total_pages} \\| کل: {len(users)}\\)"
+        header_text += f"\n{pagination_text}"
 
     lines = [header_text]
     start_index = page * PAGE_SIZE
@@ -251,7 +251,7 @@ def fmt_birthdays_list(users: list, page: int) -> str:
     for user in paginated_users:
         name = escape_markdown(user.get('first_name', 'کاربر ناشناس'))
         gregorian_date = user['birthday']
-        gregorian_str = gregorian_date.strftime('%Y-%m-%d')
+        gregorian_str = escape_markdown(gregorian_date.strftime('%Y-%m-%d'))
         lines.append(f"`•` *{name}* `\\|` gregorian: `{gregorian_str}`")
         
     return "\n".join(lines)
@@ -262,7 +262,7 @@ def fmt_marzban_system_stats(info: dict) -> str:
 
     to_gb = lambda b: b / (1024**3)
 
-    version = info.get('version', 'N/A')
+    version = escape_markdown(info.get('version', 'N/A'))
     mem_total_gb = to_gb(info.get('mem_total', 0))
     mem_used_gb = to_gb(info.get('mem_used', 0))
     mem_percent = (mem_used_gb / mem_total_gb * 100) if mem_total_gb > 0 else 0
@@ -281,27 +281,27 @@ def fmt_marzban_system_stats(info: dict) -> str:
     speed_ul_mbps = info.get('outgoing_bandwidth_speed', 0) / (1024 * 1024)
 
     report = (
-        f"📊 وضعیت سیستم پنل مرزبان (فرانسه 🇫🇷)\n"
-        f"------------------------------------\n"
-        f"⚙️ نسخه: {version}\n"
-        f"🖥️ هسته CPU: {cpu_cores} | مصرف: {cpu_usage:.1f}%\n"
-        f"💾 مصرف RAM: {mem_used_gb:.2f} / {mem_total_gb:.2f} GB \\({mem_percent:.1f}%\\)"
-        f"------------------------------------\n"
-        f"👥 کاربران کل: {total_users}\n"
-        f"🟢 فعال: {active_users}\n"
-        f"🔴 آنلاین: {online_users}\n"
-        f"⚪️ غیرفعال: {disabled_users}\n"
-        f"🗓 منقضی شده: {expired_users}\n"
-        f"------------------------------------\n"
-        f"📈 ترافیک کل:\n"
-        f"  ↓ دانلود: {total_dl_gb:.2f} GB\n"
-        f"  ↑ آپلود: {total_ul_gb:.2f} GB\n"
-        f"🚀 سرعت لحظه‌ای:\n"
-        f"  ↓ دانلود: {speed_dl_mbps:.2f} MB/s\n"
-        f"  ↑ آپلود: {speed_ul_mbps:.2f} MB/s"
+        f"*📊 وضعیت سیستم پنل مرزبان \\(فرانسه 🇫🇷\\)*\n"
+        f"`----------------------------`\n"
+        f"⚙️ نسخه: `{version}`\n"
+        f"🖥️ هسته CPU: `{cpu_cores}` \\| مصرف: `{cpu_usage:.1f}%`\n"
+        f"💾 مصرف RAM: `{mem_used_gb:.2f} / {mem_total_gb:.2f} GB` \\(`{mem_percent:.1f}%`\\)\n"
+        f"`----------------------------`\n"
+        f"👥 کاربران کل: `{total_users}`\n"
+        f"🟢 فعال: `{active_users}`\n"
+        f"🔴 آنلاین: `{online_users}`\n"
+        f"⚪️ غیرفعال: `{disabled_users}`\n"
+        f"🗓 منقضی شده: `{expired_users}`\n"
+        f"`----------------------------`\n"
+        f"*📈 ترافیک کل:*\n"
+        f"  ↓ دانلود: `{total_dl_gb:.2f} GB`\n"
+        f"  ↑ آپلود: `{total_ul_gb:.2f} GB`\n"
+        f"*🚀 سرعت لحظه‌ای:*\n"
+        f"  ↓ دانلود: `{speed_dl_mbps:.2f} MB/s`\n"
+        f"  ↑ آپلود: `{speed_ul_mbps:.2f} MB/s`"
     )
     
-    return escape_markdown(report)
+    return report
 
 def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
     title = f"کاربران پنل {panel_name}"
@@ -341,74 +341,72 @@ def fmt_admin_user_summary(info: dict) -> str:
 
     total_limit_gb = info.get('usage_limit_GB', 0)
     total_usage_gb = info.get('current_usage_GB', 0)
-    total_remaining_gb = total_limit_gb - total_usage_gb if total_limit_gb > 0 else 0
-    daily_usage_total = info.get('daily_usage_GB', 0)
     
-    total_limit_str = escape_markdown(f"{total_limit_gb:.2f}")
-    total_usage_str = escape_markdown(f"{total_usage_gb:.2f}")
-    total_remaining_str = escape_markdown(f"{total_remaining_gb:.2f}")
-    total_daily_str = escape_markdown(format_daily_usage(daily_usage_total))
+    # --- FIX: Only show total stats if user is on both panels ---
+    h_info = info.get('breakdown', {}).get('hiddify')
+    m_info = info.get('breakdown', {}).get('marzban')
+    is_on_both_panels = h_info and m_info
 
-    total_usage_line = f"🗂️ مجموع حجم : `{total_limit_str} GB`"
-    total_consumed_line = f"🔥 مجموع مصرف شده : `{total_usage_str} GB`"
-    total_remaining_line = f"📥 مجموع باقیمانده: `{total_remaining_str} GB`"
-    total_daily_line = f"⚡️ مجموع مصرف امروز: `{total_daily_str}`"
+    # Initialize lines with the name
+    report_parts = [name_line, ""]
 
-    breakdown_lines = ["\n*جزئیات سرورها*"]
-    h_info = info.get('breakdown', {}).get('hiddify', {})
-    m_info = info.get('breakdown', {}).get('marzban', {})
+    if is_on_both_panels:
+        total_remaining_gb = total_limit_gb - total_usage_gb
+        daily_usage_total = info.get('daily_usage_GB', 0)
+        
+        report_parts.extend([
+            f"🗂️ مجموع حجم : `{escape_markdown(f'{total_limit_gb:.2f}')} GB`",
+            f"🔥 مجموع مصرف شده : `{escape_markdown(f'{total_usage_gb:.2f}')} GB`",
+            f"📥 مجموع باقیمانده: `{escape_markdown(f'{total_remaining_gb:.2f}')} GB`",
+            f"⚡️ مجموع مصرف امروز: `{escape_markdown(format_daily_usage(daily_usage_total))}`"
+        ])
+
+    # --- Conditional Breakdown ---
+    if is_on_both_panels:
+        report_parts.append("\n*جزئیات سرورها*")
 
     if h_info:
-        h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0):.2f}")
-        h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0):.2f}")
-        h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0.0) if h_info.get('daily_usage') else 0.0))
+        h_daily_usage = h_info.get('daily_usage', 0.0) if h_info.get('daily_usage') else 0.0
         h_last_online_str = escape_markdown(format_raw_datetime(h_info.get('last_online')))
         
-        breakdown_lines.extend([
+        report_parts.extend([
             "\nآلمان 🇩🇪",
-            f"🗂️ مجموع حجم : `{h_limit_str} GB`",
-            f"🔥 مجموع مصرف شده : `{h_usage_str} GB`",
-            f"⚡️ مصرف امروز : `{h_daily_str}`",
+            f"🗂️ حجم : `{escape_markdown(f'{h_info.get('usage_limit_GB', 0):.2f}')} GB`",
+            f"🔥 مصرف شده : `{escape_markdown(f'{h_info.get('current_usage_GB', 0):.2f}')} GB`",
+            f"⚡️ مصرف امروز : `{escape_markdown(format_daily_usage(h_daily_usage))}`",
             f"⏰ آخرین اتصال : `{h_last_online_str}`"
         ])
+
     if m_info:
-        m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0):.2f}")
-        m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0):.2f}")
-        m_daily_str = escape_markdown(format_daily_usage(m_info.get('daily_usage', 0.0) if m_info.get('daily_usage') else 0.0))
+        m_daily_usage = m_info.get('daily_usage', 0.0) if m_info.get('daily_usage') else 0.0
         m_last_online_str = escape_markdown(format_raw_datetime(m_info.get('last_online')))
-        
-        breakdown_lines.extend([
+
+        report_parts.extend([
             "\nفرانسه 🇫🇷",
-            f"🗂️ مجموع حجم : `{m_limit_str} GB`",
-            f"🔥 مجموع مصرف شده : `{m_usage_str} GB`",
-            f"⚡️ مصرف امروز : `{m_daily_str}`",
+            f"🗂️ حجم : `{escape_markdown(f'{m_info.get('usage_limit_GB', 0):.2f}')} GB`",
+            f"🔥 مصرف شده : `{escape_markdown(f'{m_info.get('current_usage_GB', 0):.2f}')} GB`",
+            f"⚡️ مصرف امروز : `{escape_markdown(format_daily_usage(m_daily_usage))}`",
             f"⏰ آخرین اتصال : `{m_last_online_str}`"
         ])
+    
+    report_parts.append("") # Spacer
 
+    # --- Footer section (Expiry, Identifier, Status Bar) ---
     expire_days = info.get("expire")
     expire_label = "نامحدود"
     if expire_days is not None:
         expire_label = f"{expire_days} روز" if expire_days >= 0 else "منقضی شده"
-    expire_line = f"📅 انقضا: {escape_markdown(expire_label)}"
+    report_parts.append(f"📅 انقضا: {escape_markdown(expire_label)}")
     
-    identifier = escape_markdown(info.get("uuid") or info.get("name", "N/A"))
-    uuid_line = f"🔑 شناسه یکتا: `{identifier}`"
+    if h_info:
+        report_parts.append(f"🔑 شناسه یکتا: `{escape_markdown(info.get('uuid'))}`")
+    elif m_info:
+        report_parts.append(f"👤 یوزرنیم: `{escape_markdown(info.get('name'))}`")
 
+    # FIX: The progress bar function now handles its own formatting.
+    # This robustly prevents the 'parse entities' error.
     usage_percentage = info.get('usage_percentage', 0)
-    progress_bar = '░' * 15
-    filled_count = int(usage_percentage / 100 * 15)
-    if filled_count > 0:
-        progress_bar = '▓' * filled_count + '░' * (15 - filled_count)
-    
-    usage_percentage_str = escape_markdown(f"{usage_percentage:.1f}")
-    status_bar_line = f"وضعیت : {status_emoji} {progress_bar} {usage_percentage_str}%"
-    
-    report_parts = [
-        name_line, "",
-        total_usage_line, total_consumed_line, total_remaining_line, total_daily_line,
-        *breakdown_lines, "",
-        expire_line, uuid_line, "",
-        status_bar_line
-    ]
+    status_bar_line = create_progress_bar(usage_percentage) # Get the fully formatted bar
+    report_parts.append(f"\nوضعیت : {status_bar_line}")
 
     return "\n".join(report_parts)

@@ -161,27 +161,43 @@ class MarzbanAPIHandler:
         return self.get_user_by_username(marzban_username)
 
     def get_all_users(self) -> list[dict]:
-        if not self.access_token:
-            return []
-        try:
-            url = f"{self.base_url}/api/users"
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            users_data = response.json().get("users", [])
-            
-            all_users = []
-            for user in users_data:
+            all_users_raw = self._request("GET", "/users")
+            if not all_users_raw or 'users' not in all_users_raw:
+                return []
+
+            normalized_users = []
+            for user in all_users_raw['users']:
                 username = user.get("username")
-                if username:
-                    detailed_info = self.get_user_by_username(username)
-                    if detailed_info:
-                        all_users.append(detailed_info)
-                        
-            return all_users
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Marzban: Failed to get all users: {e}")
-            return []
+                if not username:
+                    continue
+
+                data_limit = user.get('data_limit')
+                limit_gb = (data_limit / (1024**3)) if data_limit is not None else 0
+                
+                used_traffic = user.get('used_traffic', 0)
+                usage_gb = used_traffic / (1024 ** 3)
+                
+                uuid = self.username_to_uuid_map.get(username)
+                expire_timestamp = user.get('expire')
+                expire_days = None
+                if expire_timestamp and expire_timestamp > 0:
+                    expire_datetime = datetime.fromtimestamp(expire_timestamp, tz=self.utc_tz)
+                    expire_days = (expire_datetime - datetime.now(self.utc_tz)).days
+
+                normalized_data = {
+                    "name": username,
+                    "uuid": uuid,
+                    "is_active": user.get('status') == 'active',
+                    "last_online": self._parse_marzban_datetime(user.get('online_at')),
+                    "usage_limit_GB": limit_gb,
+                    "current_usage_GB": usage_gb,
+                    "remaining_GB": max(0, limit_gb - usage_gb),
+                    "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
+                    "expire": expire_days,
+                }
+                normalized_users.append(normalized_data)
+                
+            return normalized_users
         
     def get_user_by_username(self, username: str) -> dict | None:
         user = self._request("GET", f"/user/{username}")
