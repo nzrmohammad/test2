@@ -17,18 +17,22 @@ class MarzbanAPIHandler:
         self.password = MARZBAN_API_PASSWORD
         self.access_token = None
         self.utc_tz = pytz.utc
-        self.uuid_to_username_map, self.username_to_uuid_map = self._load_uuid_maps()
+        self.uuid_to_username_map, self.username_to_uuid_map = {}, {}
+        self.reload_uuid_maps() # فراخوانی در زمان ساخت نمونه
 
-    def _load_uuid_maps(self):
+    def reload_uuid_maps(self) -> bool:
+        """Loads or reloads the UUID-to-Marzban-Username mapping from the JSON file."""
         try:
             with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                uuid_map = {k.lower(): v for k, v in data.items()}
-                username_map = {v: k.lower() for k, v in data.items()}
-                return uuid_map, username_map
-        except (FileNotFoundError, json.JSONDecodeError):
-            logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
-            return {}, {}
+                self.uuid_to_username_map = {k.lower(): v for k, v in data.items()}
+                self.username_to_uuid_map = {v: k.lower() for k, v in data.items()}
+                logger.info(f"Successfully loaded/reloaded {len(self.uuid_to_username_map)} user mappings from JSON.")
+                return True
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.error(f"Could not load or reload uuid_to_marzban_user.json: {e}")
+            self.uuid_to_username_map, self.username_to_uuid_map = {}, {}
+            return False
 
     def _get_access_token(self) -> bool:
         """Fetches and sets the access token. Returns True on success, False on failure."""

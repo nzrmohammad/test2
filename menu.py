@@ -106,17 +106,20 @@ class Menu:
             types.InlineKeyboardButton("🎂 تولد کاربران", callback_data="admin:list:birthdays:0"),
             types.InlineKeyboardButton("🗄️ پشتیبان‌گیری", callback_data="admin:backup_menu")
         )
+        # دکمه جدید در این ردیف اضافه می‌شود
+        kb.add(types.InlineKeyboardButton("🔄 رفرش مپینگ مرزبان", callback_data="admin:reload_maps"))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back"))
         return kb
 
     # در فایل menu.py
     def admin_management_menu(self) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:search_user_global"))
         kb.add(
             types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
             types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
         )
+        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:search_user_global"))
+
         kb.add(types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin:panel"))
         return kb
@@ -159,20 +162,18 @@ class Menu:
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
             kb = types.InlineKeyboardMarkup(row_width=2)
             
-            # FIX: Changed callback prefix from "adm:" to "admin:" to match the router.
-            p_identifier = f"{panel}:{identifier}" # Create a combined identifier for simplicity
-
             status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
-            kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{p_identifier}"))
+            # FIX: Sending parameters directly, not as a combined string
+            kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"))
             
-            kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rbd:{p_identifier}"))
+            kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rbd:{panel}:{identifier}"))
             
             kb.add(
-                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{p_identifier}"),
-                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{p_identifier}")
+                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
+                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{panel}:{identifier}")
             )
             
-            kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{p_identifier}"))
+            kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{panel}:{identifier}"))
             
             kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin:manage_panel:{panel}"))
             
@@ -212,10 +213,11 @@ class Menu:
     def admin_edit_user_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ask_edit:add_gb:{panel}:{identifier}"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ask_edit:add_days:{panel}:{identifier}")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ask_edt:add_gb:{panel}:{identifier}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ask_edt:add_days:{panel}:{identifier}")
         )
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"adm:us:{panel}:{identifier}"))
+        # FIX: Corrected "adm:" to "admin:"
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin:us:{panel}:{identifier}"))
 
         return kb
 

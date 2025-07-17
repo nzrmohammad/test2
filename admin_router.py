@@ -3,6 +3,7 @@ from telebot import types, telebot
 from admin_handlers import user_management, reporting, broadcast, backup
 from admin_hiddify_handlers import _start_add_user_convo, initialize_hiddify_handlers
 from admin_marzban_handlers import _start_add_marzban_user_convo, initialize_marzban_handlers
+from marzban_api_handler import marzban_handler
 from menu import menu
 from utils import _safe_edit
 
@@ -46,6 +47,16 @@ def _handle_server_selection(call, params):
     text_map = {"reports_menu": "لطفاً پنل را برای گزارش‌گیری انتخاب کنید:", "analytics_menu": "لطفاً پنل را برای تحلیل و آمار انتخاب کنید:"}
     _safe_edit(call.from_user.id, call.message.message_id, text_map.get(base_callback, "لطفا انتخاب کنید:"),
                reply_markup=menu.admin_server_selection_menu(f"admin:{base_callback}"))
+    
+def _handle_reload_maps(call, params):
+    """Handles the request to reload Marzban user mappings."""
+    bot.answer_callback_query(call.id, "⏳ در حال رفرش کردن مپینگ کاربران مرزبان...")
+    success = marzban_handler.reload_uuid_maps()
+    if success:
+        bot.send_message(call.from_user.id, "✅ مپینگ کاربران مرزبان با موفقیت به‌روز شد.")
+    else:
+        bot.send_message(call.from_user.id, "❌ خطا در به‌روزرسانی مپینگ. لطفاً لاگ‌ها را بررسی کنید.")
+
 
 # ===================================================================
 # Final Dispatcher Dictionary
@@ -83,6 +94,7 @@ ADMIN_CALLBACK_HANDLERS = {
     "broadcast_target": broadcast.ask_for_broadcast_message,
     "backup_menu": backup.handle_backup_menu,
     "backup": backup.handle_backup_action,
+    "reload_maps": _handle_reload_maps,
 }
 
 

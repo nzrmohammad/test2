@@ -66,11 +66,9 @@ def safe_float(value, default: float = 0.0) -> float:
     except (ValueError, TypeError):
         return default
 
+# utils.py
+
 def create_progress_bar(percent: float, length: int = 15) -> str:
-    """
-    FIX: Now returns the complete, final, and escaped Markdown string for the progress bar,
-    including the percentage, to ensure no parsing errors occur in other functions.
-    """
     percent = max(0, min(100, percent))
     filled_count = int(percent / 100 * length)
     
@@ -82,7 +80,6 @@ def create_progress_bar(percent: float, length: int = 15) -> str:
     filled_bar = '█' * filled_count
     empty_bar = '░' * (length - filled_count)
     
-    # Escape the percentage value and combine everything into one code block
     escaped_percent_str = escape_markdown(f"{percent:.1f}%")
     
     return f"`{color}{filled_bar}{empty_bar} {escaped_percent_str}`"
