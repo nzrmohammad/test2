@@ -50,10 +50,8 @@ def handle_marzban_system_stats(call, params):
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def handle_paginated_list(call, params):
-    # --- UX IMPROVEMENT: Show a loading message before slow API calls ---
     list_type, panel, page = params[0], params[1] if len(params) > 2 else None, int(params[-1])
     
-    # Show loading message only for panel-related lists that require an API call
     if panel:
         _safe_edit(call.from_user.id, call.message.message_id, "⏳ در حال دریافت اطلاعات از پنل، لطفاً صبر کنید...", reply_markup=None, parse_mode=None)
 
@@ -64,7 +62,8 @@ def handle_paginated_list(call, params):
     if list_type == "panel_users": users = all_panel_users
     elif list_type == "online_users":
         deadline = datetime.now(pytz.utc) - timedelta(minutes=3)
-        users = [u for u in all_panel_users if u.get('is_active') and u.get('last_online') and u['last_online'].astimezone(pytz.utc) >= deadline]
+        users = [u for u in all_panel_users if u.get('is_active') and isinstance(u.get('last_online'), datetime) and u['last_online'].astimezone(pytz.utc) >= deadline
+        ]
     elif list_type == "active_users":
         deadline = datetime.now(pytz.utc) - timedelta(days=1)
         users = [u for u in all_panel_users if u.get('last_online') and u['last_online'].astimezone(pytz.utc) >= deadline]
@@ -72,7 +71,7 @@ def handle_paginated_list(call, params):
         now_utc = datetime.now(pytz.utc)
         users = [u for u in all_panel_users if u.get('last_online') and 1 <= (now_utc - u['last_online'].astimezone(pytz.utc)).days < 7]
     elif list_type == "never_connected": users = [u for u in all_panel_users if not u.get('last_online')]
-    elif list_type == "top_consumers": users = sorted(all_panel_users, key=lambda u: u.get('current_usage_GB', 0), reverse=True)
+    elif list_type == "top_consumers":   sorted_users = sorted(all_panel_users, key=lambda u: u.get('current_usage_GB', 0), reverse=True, users = sorted_users[:15])
     elif list_type == "bot_users": users = db.get_all_bot_users()
     elif list_type == "birthdays": users = db.get_users_with_birthdays()
     

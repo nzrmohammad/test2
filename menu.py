@@ -118,7 +118,8 @@ class Menu:
             types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
             types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
         )
-        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:search_user_global"))
+        # استفاده از کلید کوتاه‌تر "sg"
+        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:sg"))
 
         kb.add(types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin:panel"))
@@ -159,14 +160,13 @@ class Menu:
         return kb
 
 
-    def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str) -> types.InlineKeyboardMarkup:
+    def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str, back_callback: str | None = None) -> types.InlineKeyboardMarkup:
             kb = types.InlineKeyboardMarkup(row_width=2)
             
             status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
-            # FIX: Sending parameters directly, not as a combined string
             kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"))
             
-            kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rbd:{panel}:{identifier}"))
+            kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{panel}:{identifier}"))
             
             kb.add(
                 types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
@@ -175,7 +175,8 @@ class Menu:
             
             kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{panel}:{identifier}"))
             
-            kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت پنل", callback_data=f"admin:manage_panel:{panel}"))
+            final_back_callback = back_callback or f"admin:manage_panel:{panel}"
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=final_back_callback))
             
             return kb
 
@@ -213,10 +214,9 @@ class Menu:
     def admin_edit_user_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ask_edt:add_gb:{panel}:{identifier}"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ask_edt:add_days:{panel}:{identifier}")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ae:add_gb:{panel}:{identifier}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ae:add_days:{panel}:{identifier}")
         )
-        # FIX: Corrected "adm:" to "admin:"
         kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin:us:{panel}:{identifier}"))
 
         return kb
@@ -265,10 +265,12 @@ class Menu:
 
     def admin_reset_usage_selection_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
-        btn_h = types.InlineKeyboardButton("آلمان 🇩🇪", callback_data=f"admin:reset_usage_action:hiddify:{identifier}")
-        btn_m = types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data=f"admin:reset_usage_action:marzban:{identifier}")
-        btn_both = types.InlineKeyboardButton("هر دو پنل", callback_data=f"admin:reset_usage_action:both:{identifier}")
-        btn_back = types.InlineKeyboardButton("🔙 لغو و بازگشت", callback_data=f"admin:user_summary:{panel}:{identifier}")
+        # استفاده از کلید کوتاه‌تر "rsa"
+        btn_h = types.InlineKeyboardButton("آلمان 🇩🇪", callback_data=f"admin:rsa:hiddify:{identifier}")
+        btn_m = types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data=f"admin:rsa:marzban:{identifier}")
+        btn_both = types.InlineKeyboardButton("هر دو پنل", callback_data=f"admin:rsa:both:{identifier}")
+        # استفاده از کلید کوتاه‌تر "us" برای بازگشت به منوی اطلاعات کاربر
+        btn_back = types.InlineKeyboardButton("🔙 لغو و بازگشت", callback_data=f"admin:us:{panel}:{identifier}")
         kb.add(btn_h, btn_m)
         kb.add(btn_both)
         kb.add(btn_back)

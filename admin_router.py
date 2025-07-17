@@ -70,15 +70,14 @@ ADMIN_CALLBACK_HANDLERS = {
     
     # User Actions
     "add_user": lambda c, p: (_start_add_user_convo if p[0] == 'hiddify' else _start_add_marzban_user_convo)(c.from_user.id, c.message.message_id),
-    # *** FINAL FIX: Corrected function name from handle_search_user_convo to handle_global_search_convo ***
-    "search_user_global": user_management.handle_global_search_convo,
+    "sg": user_management.handle_global_search_convo,
     "us": user_management.handle_show_user_summary,
     "edt": user_management.handle_edit_user_menu,
-    "ask_edt": user_management.handle_ask_edit_value,
+    "ae": user_management.handle_ask_edit_value,
     "tgl": user_management.handle_toggle_status,
-    "rbd": user_management.handle_reset_birthday,
+    "rb": user_management.handle_reset_birthday,
     "rusg_m": user_management.handle_reset_usage_menu,
-    "rusg_a": user_management.handle_reset_usage_action,
+    "rsa": user_management.handle_reset_usage_action,
     "del_cfm": user_management.handle_delete_user_confirm,
     "del_a": user_management.handle_delete_user_action,
     

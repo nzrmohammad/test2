@@ -360,5 +360,12 @@ class DatabaseManager:
                 if row['uuid'] not in result_map:
                     result_map[row['uuid']] = dict(row)
         return result_map
+    
+    def delete_daily_snapshots(self, uuid_id: int) -> None:
+        """Deletes all usage snapshots for a given uuid_id that were taken today (UTC)."""
+        today_start_utc = datetime.now(pytz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        with self._conn() as c:
+            c.execute("DELETE FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ?", (uuid_id, today_start_utc))
+            logger.info(f"Deleted daily snapshots for uuid_id {uuid_id}.")
 
 db = DatabaseManager()

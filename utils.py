@@ -66,23 +66,16 @@ def safe_float(value, default: float = 0.0) -> float:
     except (ValueError, TypeError):
         return default
 
-# utils.py
-
 def create_progress_bar(percent: float, length: int = 15) -> str:
     percent = max(0, min(100, percent))
     filled_count = int(percent / 100 * length)
-    
-    if percent >= 90: color = PROGRESS_COLORS["critical"]
-    elif percent >= 75: color = PROGRESS_COLORS["danger"]
-    elif percent >= 50: color = PROGRESS_COLORS["warning"]
-    else: color = PROGRESS_COLORS["safe"]
     
     filled_bar = '█' * filled_count
     empty_bar = '░' * (length - filled_count)
     
     escaped_percent_str = escape_markdown(f"{percent:.1f}%")
     
-    return f"`{color}{filled_bar}{empty_bar} {escaped_percent_str}`"
+    return f"`{filled_bar}{empty_bar} {escaped_percent_str}`"
 
 def format_daily_usage(gb: float) -> str:
     if gb < 0: return "0 MB"
