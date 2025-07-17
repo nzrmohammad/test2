@@ -4,11 +4,9 @@ from config import EMOJIS, PAGE_SIZE
 from database import db
 from utils import (
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar
+    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar, format_shamsi_tehran
 )
 
-# This function was not used and removed to avoid confusion.
-# def format_shamsi_tehran(dt_obj: datetime | None) -> str: ...
 
 def fmt_users_list(users: list, list_type: str, page: int) -> str:
     title_map = {
@@ -37,7 +35,7 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
         line = f"`•` *{name}*"
         
         if list_type == 'active':
-            last_online_str = format_raw_datetime(user.get('last_online')).split(' ')[-1]
+            last_online_str = format_shamsi_tehran(user.get('last_online')).split(' ')[-1]
             usage_p = user.get('usage_percentage', 0)
             line += f" `|` Last Seen: `{escape_markdown(last_online_str)}` `|` Usage: `{usage_p:.1f}%`"
 
@@ -367,7 +365,7 @@ def fmt_admin_user_summary(info: dict) -> str:
 
     if h_info:
         h_daily_usage = h_info.get('daily_usage', 0.0) if h_info.get('daily_usage') else 0.0
-        h_last_online_str = escape_markdown(format_raw_datetime(h_info.get('last_online')))
+        h_last_online_str = escape_markdown(format_shamsi_tehran(h_info.get('last_online')))
         
         report_parts.extend([
             "\nآلمان 🇩🇪",
@@ -379,7 +377,7 @@ def fmt_admin_user_summary(info: dict) -> str:
 
     if m_info:
         m_daily_usage = m_info.get('daily_usage', 0.0) if m_info.get('daily_usage') else 0.0
-        m_last_online_str = escape_markdown(format_raw_datetime(m_info.get('last_online')))
+        m_last_online_str = escape_markdown(format_shamsi_tehran(m_info.get('last_online')))
 
         report_parts.extend([
             "\nفرانسه 🇫🇷",

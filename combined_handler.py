@@ -6,6 +6,7 @@ from marzban_api_handler import marzban_handler
 from database import db
 from utils import validate_uuid
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,30 @@ def get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
     h_online = h_info.get('last_online') if h_info else None
     m_online = m_info.get('last_online') if m_info else None
     
-    if m_online and (not h_online or m_online > h_online):
-        base_info['last_online'] = m_online
+    # **تغییر اصلی اول: محاسبه مصرف روزانه در همین تابع**
+    uuid = base_info.get('uuid')
+    if uuid:
+        uuid_id = db.get_uuid_id_by_uuid(uuid)
+        if uuid_id:
+            daily_usage_dict = db.get_usage_since_midnight(uuid_id)
+            # افزودن مجموع مصرف روزانه به اطلاعات اصلی
+            base_info['daily_usage_GB'] = sum(daily_usage_dict.values())
+            # افزودن جزئیات مصرف روزانه به هر پنل
+            if base_info.get('breakdown', {}).get('hiddify'):
+                base_info['breakdown']['hiddify']['daily_usage'] = daily_usage_dict.get('hiddify', 0.0)
+            if base_info.get('breakdown', {}).get('marzban'):
+                base_info['breakdown']['marzban']['daily_usage'] = daily_usage_dict.get('marzban', 0.0)
+
+    # مقایسه امن تاریخ‌ها برای پیدا کردن جدیدترین زمان آنلاین بودن
+    latest_online = None
+    if h_online and m_online:
+        h_online_utc = h_online.astimezone(pytz.utc)
+        m_online_utc = m_online.astimezone(pytz.utc)
+        latest_online = max(h_online_utc, m_online_utc)
     else:
-        base_info['last_online'] = h_online
+        latest_online = h_online or m_online
+
+    base_info['last_online'] = latest_online
 
     return base_info
 

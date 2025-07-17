@@ -25,7 +25,12 @@ def start_broadcast_flow(call, params):
 def ask_for_broadcast_message(call, params):
     target_group = params[0]
     uid, msg_id = call.from_user.id, call.message.message_id
-    admin_conversations[uid] = {'broadcast_target': target_group}
+    
+    admin_conversations[uid] = {
+        'broadcast_target': target_group,
+        'msg_id': msg_id
+    }
+    
     prompt = f"پیام شما برای گروه «{target_group.replace('_', ' ').title()}» ارسال خواهد شد.\n\nلطفاً پیام خود را بنویسید:"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:panel"), parse_mode="HTML")
     bot.register_next_step_handler_by_chat_id(uid, _send_broadcast)
@@ -33,15 +38,17 @@ def ask_for_broadcast_message(call, params):
 def _send_broadcast(message: types.Message):
     admin_id = message.from_user.id
     if admin_id not in admin_conversations: return
-    target_group = admin_conversations.pop(admin_id)['broadcast_target']
+
+    convo_data = admin_conversations.pop(admin_id)
+    target_group = convo_data.get('broadcast_target')
+    original_msg_id = convo_data.get('msg_id')
     
     uuids_to_fetch, target_user_ids = [], []
     
     if target_group != 'all':
-        # FIX: منطق جدید با API Handler های خالص
         h_users = hiddify_handler.get_all_users()
         m_users = marzban_handler.get_all_users()
-        all_users = h_users + [u for u in m_users if u.get('uuid')] # ترکیب با اطمینان از وجود UUID
+        all_users = (h_users or []) + [u for u in (m_users or []) if u.get('uuid')]
         
         filtered_users = []
         now_utc = datetime.now(pytz.utc)
@@ -64,11 +71,17 @@ def _send_broadcast(message: types.Message):
         target_user_ids = db.get_user_ids_by_uuids(uuids_to_fetch)
 
     if not target_user_ids:
-        bot.send_message(admin_id, "هیچ کاربری در گروه هدف یافت نشد.")
+        if original_msg_id:
+            _safe_edit(admin_id, original_msg_id, "هیچ کاربری در گروه هدف یافت نشد.", reply_markup=menu.admin_panel())
+        else:
+            bot.send_message(admin_id, "هیچ کاربری در گروه هدف یافت نشد.")
         return
 
     unique_targets = set(target_user_ids) - {admin_id}
-    bot.send_message(admin_id, f"⏳ شروع ارسال پیام برای {len(unique_targets)} کاربر...")
+    
+    if original_msg_id:
+        _safe_edit(admin_id, original_msg_id, f"⏳ شروع ارسال پیام برای {len(unique_targets)} کاربر...", parse_mode=None, reply_markup=None)
+
     success_count, fail_count = 0, 0
     for user_id in unique_targets:
         try:
@@ -78,5 +91,16 @@ def _send_broadcast(message: types.Message):
             logger.warning(f"Failed to send broadcast to user {user_id}: {e}")
             fail_count += 1
         time.sleep(0.1)
-    bot.send_message(admin_id, f"✅ ارسال پیام همگانی تمام شد.\n- ✔️ موفق: {success_count}\n- ❌ ناموفق: {fail_count}")
+        
+    final_text = (f"✅ ارسال پیام همگانی تمام شد.\n"
+                  f"- ✔️ موفق: {success_count}\n"
+                  f"- ❌ ناموفق: {fail_count}")
+
+    final_kb = types.InlineKeyboardMarkup()
+    final_kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin:panel"))
+
+    if original_msg_id:
+        _safe_edit(admin_id, original_msg_id, final_text, parse_mode=None, reply_markup=final_kb)
+    else:
+        bot.send_message(admin_id, final_text, reply_markup=final_kb)
 

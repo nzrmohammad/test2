@@ -4,6 +4,8 @@ from typing import Union, Optional
 import pytz
 import json
 import logging
+import jdatetime
+
 
 from config import EMOJIS, PROGRESS_COLORS
 
@@ -67,14 +69,18 @@ def safe_float(value, default: float = 0.0) -> float:
         return default
 
 def create_progress_bar(percent: float, length: int = 15) -> str:
+    # اطمینان از اینکه درصد بین ۰ تا ۱۰۰ است
     percent = max(0, min(100, percent))
     filled_count = int(percent / 100 * length)
     
+    # ساخت بخش‌های پر و خالی نوار
     filled_bar = '█' * filled_count
     empty_bar = '░' * (length - filled_count)
     
+    # **نکته کلیدی:** فرمت کردن و آماده‌سازی رشته درصد برای نمایش امن در Markdown
     escaped_percent_str = escape_markdown(f"{percent:.1f}%")
     
+    # ترکیب نهایی و بازگرداندن نتیجه
     return f"`{filled_bar}{empty_bar} {escaped_percent_str}`"
 
 def format_daily_usage(gb: float) -> str:
@@ -93,3 +99,26 @@ def load_custom_links():
         with open('custom_sub_links.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception: return {}
+
+def format_shamsi_tehran(dt_obj: Optional[datetime]) -> str:
+    """
+    یک شیء datetime را به تاریخ شمسی و زمان تهران تبدیل می‌کند.
+    این تابع جایگزین نهایی برای نمایش تمام تاریخ‌ها به کاربر است.
+    """
+    if not isinstance(dt_obj, datetime):
+        return "هرگز"
+
+    tehran_tz = pytz.timezone("Asia/Tehran")
+    
+    # اگر شیء ورودی منطقه زمانی نداشت، آن را UTC در نظر می‌گیریم
+    if dt_obj.tzinfo is None:
+        dt_obj = pytz.utc.localize(dt_obj)
+        
+    # تبدیل به منطقه زمانی تهران
+    tehran_dt = dt_obj.astimezone(tehran_tz)
+    
+    # تبدیل به تاریخ جلالی (شمسی)
+    j_date = jdatetime.datetime.fromgregorian(datetime=tehran_dt)
+    
+    # فرمت‌بندی خروجی
+    return j_date.strftime('%Y/%m/%d %H:%M:%S')

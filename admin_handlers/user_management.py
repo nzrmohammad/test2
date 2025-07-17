@@ -19,10 +19,22 @@ def initialize_user_management_handlers(b, conv_dict):
 
 
 def handle_show_user_summary(call, params):
-    # FIX: Standardized parameter parsing
-    panel, identifier = params[0], params[1]
-    back_callback = f"admin:{params[2]}" if len(params) > 2 else None
+    # **تغییر اصلی: دیکشنری برای تبدیل مقادیر کوتاه شده به حالت اصلی**
+    panel_map = {'h': 'hiddify', 'm': 'marzban'}
+    back_map = {'mgt': 'management_menu'}
 
+    # **تغییر اصلی: خواندن پارامترهای جدید و کوتاه‌شده**
+    panel_short = params[0]
+    identifier = params[1]
+    panel = panel_map.get(panel_short, 'hiddify')  # تبدیل 'h' به 'hiddify' و 'm' به 'marzban'
+
+    back_callback = None
+    if len(params) > 2:
+        back_key_short = params[2]
+        back_key_full = back_map.get(back_key_short) # تبدیل 'mgt' به 'management_menu'
+        if back_key_full:
+            back_callback = f"admin:{back_key_full}"
+    
     info = combined_handler.get_combined_user_info(identifier)
     if info:
         text = fmt_admin_user_summary(info)
@@ -144,7 +156,6 @@ def handle_reset_usage_action(call, params):
         return
 
     h_success, m_success = True, True
-    # شناسه کاربر در دیتابیس را یک بار دریافت می‌کنیم
     uuid_id_in_db = db.get_uuid_id_by_uuid(info.get('uuid', ''))
 
     if panel_to_reset in ['hiddify', 'both'] and 'hiddify' in info.get('breakdown', {}):
@@ -154,20 +165,17 @@ def handle_reset_usage_action(call, params):
         m_success = combined_handler.marzban_handler.reset_user_usage(info['name'])
     
     if h_success and m_success:
-        # اگر عملیات موفق بود و کاربر در دیتابیس ربات وجود داشت
         if uuid_id_in_db:
-            # اسنپ‌شات‌های امروز را پاک می‌کنیم
             db.delete_daily_snapshots(uuid_id_in_db)
-            # یک اسنپ‌شات جدید با مقادیر صفر اضافه می‌کنیم تا محاسبات بعدی درست باشد
             db.add_usage_snapshot(uuid_id_in_db, 0.0, 0.0)
             
-        bot.answer_callback_query(call.id, "✅ مصرف کاربر با موفقیت صفر شد.")
-        # اطلاعات کاربر را مجددا دریافت می‌کنیم تا گزارش آپدیت شده نمایش داده شود
         new_info = combined_handler.get_combined_user_info(identifier)
         if new_info:
+            text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ مصرف کاربر با موفقیت صفر شد\\.*"
+            
             original_panel = 'hiddify' if 'hiddify' in new_info.get('breakdown', {}) else 'marzban'
             kb = menu.admin_user_interactive_management(identifier, new_info['is_active'], original_panel)
-            _safe_edit(call.from_user.id, call.message.message_id, fmt_admin_user_summary(new_info), reply_markup=kb)
+            _safe_edit(call.from_user.id, call.message.message_id, text_to_show, reply_markup=kb)
     else:
         bot.answer_callback_query(call.id, "❌ عملیات ناموفق بود.", show_alert=True)
 
@@ -226,6 +234,7 @@ def _handle_global_search_response(message: types.Message):
             return
 
         if len(results) == 1:
+            # ... (این بخش بدون تغییر است)
             user = results[0]
             panel = user.get('panel', 'hiddify')
             identifier = user.get('uuid') or user.get('name')
@@ -248,7 +257,11 @@ def _handle_global_search_response(message: types.Message):
                 button_text = f"{status_emoji} {panel_emoji} {user['name']} ({usage_str}/{limit_str} GB)"
                 
                 panel = user.get('panel', 'hiddify')
-                callback_data = f"admin:us:{panel}:{identifier}:management_menu"
+                
+                # **تغییر اصلی: کوتاه کردن پارامترها برای جلوگیری از خطای تلگرام**
+                panel_short = 'h' if panel == 'hiddify' else 'm'
+                callback_data = f"admin:us:{panel_short}:{identifier}:mgt"
+                
                 kb.add(types.InlineKeyboardButton(
                     button_text,
                     callback_data=callback_data

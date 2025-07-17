@@ -37,12 +37,19 @@ class HiddifyAPIHandler:
             return None
 
     def _parse_api_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
-        if not date_str or date_str.startswith('0001-01-01'): return None
+        if not date_str or date_str.startswith('0001-01-01'):
+            return None
         try:
-            # Handle different formats, including those with 'Z' for UTC
-            clean_str = date_str.replace('Z', '+00:00').split('.')[0]
-            return datetime.fromisoformat(clean_str)
-        except (ValueError, TypeError): return None
+            if 'Z' in date_str or '+' in date_str[10:] or '-' in date_str[10:]:
+                clean_str = date_str.replace('Z', '+00:00').split('.')[0]
+                dt_obj = datetime.fromisoformat(clean_str)
+            else:
+                dt_obj = datetime.fromisoformat(date_str.split('.')[0])
+                dt_obj = self.tehran_tz.localize(dt_obj)
+            return dt_obj
+        except (ValueError, TypeError):
+            logger.warning(f"Could not parse Hiddify datetime string: {date_str}")
+            return None
 
     def _calculate_remaining_days(self, start_date_str: Optional[str], package_days: Optional[int]) -> Optional[int]:
         if package_days in [None, 0]: return None

@@ -6,7 +6,7 @@ from datetime import datetime
 from utils import (
     create_progress_bar,
     format_daily_usage, escape_markdown,
-    load_service_plans, format_raw_datetime
+    load_service_plans, format_raw_datetime, format_shamsi_tehran
 )
 
 def fmt_one(info: dict, daily_usage_dict: dict) -> str:
@@ -27,12 +27,12 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f}")
     h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f}")
     h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
-    h_last_online = escape_markdown(format_raw_datetime(h_info.get('last_online')))
+    h_last_online = escape_markdown(format_shamsi_tehran(h_info.get('last_online')))
     
     m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f}")
     m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f}")
     m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
-    m_last_online = escape_markdown(format_raw_datetime(m_info.get('last_online')))
+    m_last_online = escape_markdown(format_shamsi_tehran(m_info.get('last_online')))
 
     expire_days = info.get("expire")
     expire_label = "نامحدود"

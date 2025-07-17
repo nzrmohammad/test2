@@ -142,14 +142,18 @@ class MarzbanAPIHandler:
             return False
         
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:
-        if not date_str:
-            return None
-        try:
-            if date_str.endswith('Z'):
-                date_str = date_str[:-1] + '+00:00'
-            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        except (ValueError, TypeError):
-            return None
+            if not date_str:
+                return None
+            try:
+                clean_str = date_str.replace('Z', '+00:00').split('.')[0]
+                dt_obj = datetime.fromisoformat(clean_str)
+
+                if dt_obj.tzinfo is None:
+                    dt_obj = self.utc_tz.localize(dt_obj)
+                return dt_obj
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse Marzban datetime string: {date_str}")
+                return None
         
     def get_user_info(self, uuid: str) -> dict | None:
         """Gets a single user's details from Marzban by their Hiddify UUID."""

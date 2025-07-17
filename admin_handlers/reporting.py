@@ -59,22 +59,38 @@ def handle_paginated_list(call, params):
     if panel == 'hiddify': all_panel_users = hiddify_handler.get_all_users()
     elif panel == 'marzban': all_panel_users = marzban_handler.get_all_users()
     
-    if list_type == "panel_users": users = all_panel_users
+    if list_type == "panel_users": 
+        users = all_panel_users
     elif list_type == "online_users":
         deadline = datetime.now(pytz.utc) - timedelta(minutes=3)
-        users = [u for u in all_panel_users if u.get('is_active') and isinstance(u.get('last_online'), datetime) and u['last_online'].astimezone(pytz.utc) >= deadline
-        ]
+        # **تغییر اصلی:** اینجا لیست کاربران آنلاین فیلتر می‌شوند
+        online_users = [u for u in all_panel_users if u.get('is_active') and isinstance(u.get('last_online'), datetime) and u['last_online'].astimezone(pytz.utc) >= deadline]
+        # **تغییر اصلی:** برای هر کاربر آنلاین، مصرف روزانه‌اش از دیتابیس خوانده می‌شود
+        for user in online_users:
+            if user.get('uuid'):
+                # مجموع مصرف روزانه از هر دو پنل محاسبه و به اطلاعات کاربر اضافه می‌شود
+                user['daily_usage_GB'] = sum(db.get_usage_since_midnight_by_uuid(user['uuid']).values())
+            else:
+                user['daily_usage_GB'] = 0 # اگر UUID نداشت، مصرف صفر در نظر گرفته می‌شود
+        users = online_users
     elif list_type == "active_users":
         deadline = datetime.now(pytz.utc) - timedelta(days=1)
         users = [u for u in all_panel_users if u.get('last_online') and u['last_online'].astimezone(pytz.utc) >= deadline]
     elif list_type == "inactive_users":
         now_utc = datetime.now(pytz.utc)
         users = [u for u in all_panel_users if u.get('last_online') and 1 <= (now_utc - u['last_online'].astimezone(pytz.utc)).days < 7]
-    elif list_type == "never_connected": users = [u for u in all_panel_users if not u.get('last_online')]
-    elif list_type == "top_consumers":   sorted_users = sorted(all_panel_users, key=lambda u: u.get('current_usage_GB', 0), reverse=True, users = sorted_users[:15])
-    elif list_type == "bot_users": users = db.get_all_bot_users()
-    elif list_type == "birthdays": users = db.get_users_with_birthdays()
+    elif list_type == "never_connected": 
+        users = [u for u in all_panel_users if not u.get('last_online')]
+    elif list_type == "top_consumers":
+        # **رفع باگ:** ایراد نوشتاری در این خط کد اصلاح شد
+        sorted_users = sorted(all_panel_users, key=lambda u: u.get('current_usage_GB', 0), reverse=True)
+        users = sorted_users[:100] # نمایش ۱۰۰ کاربر پرمصرف
+    elif list_type == "bot_users": 
+        users = db.get_all_bot_users()
+    elif list_type == "birthdays": 
+        users = db.get_users_with_birthdays()
     
+    # ... (ادامه تابع بدون تغییر است)
     list_configs = {
         "panel_users": {"format": lambda u, pg, p: fmt_panel_users_list(u, "آلمان 🇩🇪" if p == "hiddify" else "فرانسه 🇫🇷", pg), "back": "manage_panel"},
         "online_users": {"format": fmt_online_users_list, "back": "reports_menu"},
