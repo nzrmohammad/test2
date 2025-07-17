@@ -1,8 +1,7 @@
 import re
-from datetime import datetime, date
+from datetime import datetime
 from typing import Union, Optional
 import pytz
-import jdatetime
 import json
 import logging
 
@@ -13,27 +12,16 @@ bot = None
 
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
 
-def format_datetime_for_user(dt_obj: Optional[datetime]) -> str:
+def format_raw_datetime(dt_obj: Optional[datetime]) -> str:
     """
-    THE FINAL, CORRECT, AND ONLY FUNCTION FOR DATETIME FORMATTING.
-    Converts a datetime object to a Shamsi date and Tehran time string.
+    THE ONLY DATE FORMATTER - FINAL VERSION.
+    Displays the raw datetime string from the panel's API without any conversion.
     """
-    if not isinstance(dt_obj, datetime):
-        return "هرگز"
-
-    # Step 1: Assume the incoming datetime is UTC. If it's naive, localize it.
-    if dt_obj.tzinfo is None:
-        dt_obj = pytz.utc.localize(dt_obj)
-    
-    # Step 2: Convert the UTC time to 'Asia/Tehran' timezone.
-    tehran_tz = pytz.timezone('Asia/Tehran')
-    tehran_dt = dt_obj.astimezone(tehran_tz)
-    
-    # Step 3: Convert the Gregorian date part to Shamsi.
-    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
-    
-    # Step 4: Format the output string using the CORRECT Tehran-converted parts.
-    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"
+    if isinstance(dt_obj, datetime):
+        return dt_obj.strftime('%Y-%m-%d %H:%M:%S')
+    if isinstance(dt_obj, str) and dt_obj:
+        return dt_obj
+    return "هرگز"
 
 def initialize_utils(b_instance):
     global bot
@@ -49,21 +37,14 @@ def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
         bot.edit_message_text(text=text, chat_id=chat_id, message_id=msg_id, **kwargs)
     except Exception as e:
         if 'message not found' not in str(e) and 'message is not modified' not in str(e):
-            pass
-        else:
             logger.error(f"Safe edit failed: {e}")
+        else:
+            pass
 
 def escape_markdown(text: Union[str, int, float]) -> str:
     text = str(text)
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
-
-def shamsi_to_gregorian(shamsi_str: str) -> Optional[date]:
-    try:
-        year, month, day = map(int, shamsi_str.split('/'))
-        return jdatetime.date(year, month, day).togregorian()
-    except (ValueError, TypeError):
-        return None
 
 def format_relative_time(dt: Optional[datetime]) -> str:
     if not dt: return "Unknown"

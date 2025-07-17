@@ -23,8 +23,8 @@ class MarzbanAPIHandler:
         try:
             with open('uuid_to_marzban_user.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                uuid_map = data
-                username_map = {v: k for k, v in data.items()}
+                uuid_map = {k.lower(): v for k, v in data.items()}
+                username_map = {v: k.lower() for k, v in data.items()}
                 return uuid_map, username_map
         except (FileNotFoundError, json.JSONDecodeError):
             logger.warning("uuid_to_marzban_user.json not found or invalid. Marzban mapping will be disabled.")
@@ -51,7 +51,7 @@ class MarzbanAPIHandler:
         """A central request function with automatic token refresh."""
         if not self.access_token:
             if not self._get_access_token():
-                return None # Failed to get token, can't proceed
+                return None
 
         url = f"{self.api_base_url}/{endpoint.strip('/')}"
         headers = {"Authorization": f"Bearer {self.access_token}", "Accept": "application/json"}
@@ -66,7 +66,7 @@ class MarzbanAPIHandler:
 
             response.raise_for_status()
             
-            if response.status_code == 204: # No Content
+            if response.status_code == 204:
                 return True
             return response.json()
 
@@ -82,14 +82,13 @@ class MarzbanAPIHandler:
             url = f"{self.base_url}/api/user"
             headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
             
-            # Prepare data for Marzban API
             expire_timestamp = 0
             if user_data.get('package_days', 0) > 0:
                 expire_timestamp = int((datetime.now() + timedelta(days=user_data.get('package_days', 0))).timestamp())
 
             payload = {
                 "username": user_data.get('username'),
-                "proxies": {"vless": {}}, # Default proxy setting
+                "proxies": {"vless": {}},
                 "data_limit": int(user_data.get('usage_limit_GB', 0) * (1024**3)),
                 "expire": expire_timestamp,
             }
@@ -112,7 +111,6 @@ class MarzbanAPIHandler:
             current_response.raise_for_status()
             current_data = current_response.json()
 
-            # Initialize payload with data from the 'data' argument if it exists
             payload = data.copy() if data else {}
 
             if add_usage_gb != 0:
@@ -128,7 +126,6 @@ class MarzbanAPIHandler:
                 payload['expire'] = int(new_expire_dt.timestamp())
 
             if not payload:
-                # Nothing to change
                 return True
 
             put_url = f"{self.base_url}/api/user/{username}"
@@ -144,25 +141,23 @@ class MarzbanAPIHandler:
         if not date_str:
             return None
         try:
-            clean_str = date_str.split('.')[0].replace('T', ' ')
-            naive_dt = datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
-            return pytz.utc.localize(naive_dt)
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Marzban: Could not parse datetime string '{date_str}': {e}")
+            if date_str.endswith('Z'):
+                date_str = date_str[:-1] + '+00:00'
+            return datetime.fromisoformat(date_str.split('.')[0])
+        except (ValueError, TypeError):
             return None
         
-    # --- THIS FUNCTION MUST EXIST ---
     def get_user_info(self, uuid: str) -> dict | None:
         """Gets a single user's details from Marzban by their Hiddify UUID."""
         if not self.access_token:
-            return None
+            if not self._get_access_token():
+                return None
         
-        # Find the Marzban username from the Hiddify UUID
-        marzban_username = self.uuid_map.get(uuid)
+        # FINAL FIX: Normalize the UUID to lowercase before lookup for 100% reliable matching.
+        marzban_username = self.uuid_to_username_map.get(uuid.lower())
         if not marzban_username:
-            return None # If no mapping exists, the user is not in Marzban
+            return None
 
-        # Reuse the get_user_by_username logic
         return self.get_user_by_username(marzban_username)
 
     def get_all_users(self) -> list[dict]:
@@ -192,9 +187,6 @@ class MarzbanAPIHandler:
         user = self._request("GET", f"/user/{username}")
         if not user: return None
 
-        # *** ADDING LOG ***
-        logger.info(f"[MARZBAN_RAW_DATA] Raw user data for {username}: {user}")
-
         uuid = self.username_to_uuid_map.get(username, None)
         usage_gb = user.get('used_traffic', 0) / (1024 ** 3)
         limit_gb = user.get('data_limit', 0) / (1024 ** 3)
@@ -212,12 +204,9 @@ class MarzbanAPIHandler:
             "usage_percentage": (usage_gb / limit_gb * 100) if limit_gb > 0 else 0,
             "expire": expire_days,
         }
-        # *** ADDING LOG ***
-        logger.info(f"[MARZBAN_NORMALIZED_DATA] Normalized user data: {normalized_data}")
         return normalized_data
 
     def get_system_stats(self) -> dict | None:
-            """اطلاعات و آمار کلی سیستم را از پنل مرزبان دریافت می‌کند."""
             if not self.access_token:
                 return None
             try:
@@ -231,7 +220,6 @@ class MarzbanAPIHandler:
                 return None
 
     def delete_user(self, username: str) -> bool:
-        """Deletes a user from the Marzban panel by username."""
         if not self.access_token:
             return False
         try:
@@ -245,7 +233,6 @@ class MarzbanAPIHandler:
             return False
 
     def reset_user_usage(self, username: str) -> bool:
-        """Resets a user's data usage in the Marzban panel."""
         if not self.access_token:
             return False
         try:

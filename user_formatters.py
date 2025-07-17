@@ -2,12 +2,11 @@ import pytz
 from config import EMOJIS, PAGE_SIZE
 from database import db
 import combined_handler
-import jdatetime
 from datetime import datetime
 from utils import (
     create_progress_bar,
     format_daily_usage, escape_markdown,
-    load_service_plans, format_datetime_for_user
+    load_service_plans, format_raw_datetime
 )
 
 def fmt_one(info: dict, daily_usage_dict: dict) -> str:
@@ -22,19 +21,18 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f}")
     total_daily_gb_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
 
-    # --- FIX: Access breakdown data correctly ---
     h_info = info.get('breakdown', {}).get('hiddify', {})
     m_info = info.get('breakdown', {}).get('marzban', {})
 
     h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f}")
     h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f}")
     h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
-    h_last_online = escape_markdown(format_datetime_for_user(h_info.get('last_online')))
+    h_last_online = escape_markdown(format_raw_datetime(h_info.get('last_online')))
     
     m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f}")
     m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f}")
     m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
-    m_last_online = escape_markdown(format_datetime_for_user(m_info.get('last_online')))
+    m_last_online = escape_markdown(format_raw_datetime(m_info.get('last_online')))
 
     expire_days = info.get("expire")
     expire_label = "نامحدود"
@@ -89,7 +87,6 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     daily_usage_dict = db.get_usage_since_midnight(target_row['id'])
     name_escaped = escape_markdown(info.get("name", "کاربر ناشناس"))
 
-    # --- FIX: Access breakdown data correctly ---
     h_info = info.get('breakdown', {}).get('hiddify', {})
     m_info = info.get('breakdown', {}).get('marzban', {})
 
@@ -158,7 +155,6 @@ def fmt_user_report(user_infos: list) -> str:
         if expire_days is not None:
             expire_str = f"`{expire_days} روز`" if expire_days >= 0 else "`منقضی شده`"
         
-        # بخش جدید برای نمایش تفکیک مصرف روزانه
         daily_breakdown = []
         if 'hiddify' in info.get('breakdown', {}):
             daily_breakdown.append(f"`  `🇩🇪 *مصرف امروز آلمان:* `{escape_markdown(format_daily_usage(h_daily))}`")
@@ -178,7 +174,6 @@ def fmt_user_report(user_infos: list) -> str:
     report_body = "\n\n".join(accounts_details)
     total_daily_all = total_daily_hiddify + total_daily_marzban
     
-    # بخش جدید برای نمایش مجموع مصرف روزانه به تفکیک
     footer = [
         f"\n{EMOJIS['lightning']} *مجموع کل مصرف امروز شما:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
         f"`  `🇩🇪 مجموع آلمان: `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
@@ -224,26 +219,3 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
         lines.append(f"`• {hours}` ساعت گذشته: `{escape_markdown(usage_str)}`")
         
     return "\n".join(lines)
-
-
-def format_shamsi_tehran_datetime(dt_obj: datetime | None) -> str:
-    """
-    یک شیء datetime با منطقه زمانی UTC دریافت کرده و آن را به تاریخ شمسی 
-    و ساعت به وقت تهران تبدیل می‌کند. اگر ورودی معتبر نباشد، 'هرگز' برمی‌گرداند.
-    """
-    if not dt_obj:
-        return "هرگز"
-    
-    # اطمینان از اینکه شیء ورودی دارای منطقه زمانی است (پیش‌فرض UTC)
-    if dt_obj.tzinfo is None:
-        dt_obj = pytz.utc.localize(dt_obj)
-
-    # تبدیل به منطقه زمانی تهران
-    tehran_tz = pytz.timezone('Asia/Tehran')
-    tehran_dt = dt_obj.astimezone(tehran_tz)
-    
-    # تبدیل تاریخ میلادی به شمسی
-    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
-    
-    # قالب‌بندی خروجی به صورت 'YYYY/MM/DD - HH:MM'
-    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"

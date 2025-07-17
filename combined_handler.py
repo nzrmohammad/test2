@@ -1,4 +1,6 @@
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
+
 from hiddify_api_handler import hiddify_handler
 from marzban_api_handler import marzban_handler
 from database import db
@@ -21,16 +23,13 @@ def get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
             
     if not h_info and not m_info: return None
 
-    # Use Hiddify as base if it exists, otherwise Marzban
     base_info = (h_info or m_info).copy()
     
-    # Always create the breakdown structure for consistent formatting
     base_info['breakdown'] = {
         'hiddify': h_info if h_info else {},
         'marzban': m_info if m_info else {}
     }
     
-    # Correctly recalculate totals
     h_limit = h_info.get('usage_limit_GB', 0) if h_info else 0
     m_limit = m_info.get('usage_limit_GB', 0) if m_info else 0
     total_limit = h_limit + m_limit
@@ -44,7 +43,6 @@ def get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
     base_info['remaining_GB'] = max(0, total_limit - total_usage)
     base_info['usage_percentage'] = (total_usage / total_limit * 100) if total_limit > 0 else 0
     
-    # Finalize name and choose the latest online time
     base_info['name'] = (h_info or m_info).get('name')
     h_online = h_info.get('last_online') if h_info else None
     m_online = m_info.get('last_online') if m_info else None
@@ -56,7 +54,51 @@ def get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
 
     return base_info
 
-# ... (The rest of the file can remain the same)
+def modify_user_on_all_panels(identifier: str, add_gb: float = 0, add_days: int = 0, target_panel: str = 'both') -> bool:
+    """
+    Modifies a user on Hiddify, Marzban, or both, handling relative additions.
+    This is a new, crucial function to fix editing bugs.
+    """
+    info = get_combined_user_info(identifier)
+    if not info:
+        logger.error(f"Cannot modify non-existent user: {identifier}")
+        return False
+
+    h_success, m_success = True, True  # Assume success if not targeted
+
+    # --- Hiddify Modification ---
+    if target_panel in ['hiddify', 'both'] and 'hiddify' in info.get('breakdown', {}):
+        h_info = info['breakdown']['hiddify']
+        h_payload = {}
+        
+        if add_gb != 0:
+            current_limit = h_info.get('usage_limit_GB', 0)
+            h_payload['usage_limit_GB'] = current_limit + add_gb
+        
+        if add_days != 0:
+            # Hiddify needs an absolute number of days, so we calculate it.
+            current_expire = h_info.get('expire', 0)
+            # If expired, start from today. Otherwise, add to remaining days.
+            base_days = current_expire if current_expire is not None and current_expire > 0 else 0
+            h_payload['package_days'] = base_days + add_days
+
+        if h_payload:
+            h_success = hiddify_handler.modify_user(h_info['uuid'], h_payload)
+        else:
+            h_success = True # Nothing to do
+
+    # --- Marzban Modification ---
+    if target_panel in ['marzban', 'both'] and 'marzban' in info.get('breakdown', {}):
+        m_info = info['breakdown']['marzban']
+        # Marzban handler already supports relative additions directly
+        m_success = marzban_handler.modify_user(
+            username=m_info['name'],
+            add_usage_gb=add_gb,
+            add_days=add_days
+        )
+
+    return h_success and m_success
+
 def delete_user_from_all_panels(identifier: str) -> bool:
     info = get_combined_user_info(identifier)
     if not info: return False

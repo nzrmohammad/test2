@@ -17,30 +17,8 @@ def initialize_user_management_handlers(b, conv_dict):
     bot = b
     admin_conversations = conv_dict
 
-def _get_combined_user_info(identifier: str) -> Optional[Dict[str, Any]]:
-    # (این تابع خصوصی است و آندرلاین آن باقی می‌ماند)
-    is_uuid = validate_uuid(identifier)
-    h_info, m_info = None, None
-    if is_uuid: h_info = combined_handler.user_info(identifier)
-    m_info = combined_handler.get_user_info(identifier) if is_uuid else combined_handler.get_user_by_username(identifier)
-    if not h_info and not m_info: return None
-    if m_info and not h_info:
-        m_info['breakdown'] = {'marzban': {'usage': m_info['current_usage_GB'], 'limit': m_info['usage_limit_GB'], 'last_online': m_info.get('last_online')}}
-        return m_info
-    if h_info and not m_info:
-        h_info['breakdown'] = {'hiddify': {'usage': h_info['current_usage_GB'], 'limit': h_info['usage_limit_GB'], 'last_online': h_info.get('last_online')}}
-        return h_info
-    if h_info and m_info:
-        h_info['breakdown'] = {'hiddify': h_info, 'marzban': m_info}
-        total_limit = h_info['usage_limit_GB'] + m_info['usage_limit_GB']
-        total_usage = h_info['current_usage_GB'] + m_info['current_usage_GB']
-        h_info['usage_limit_GB'], h_info['current_usage_GB'] = total_limit, total_usage
-        h_info['remaining_GB'] = max(0, total_limit - total_usage)
-        h_info['usage_percentage'] = (total_usage / total_limit * 100) if total_limit > 0 else 0
-        if m_info.get('last_online') and (not h_info.get('last_online') or m_info['last_online'] > h_info['last_online']):
-            h_info['last_online'] = m_info['last_online']
-        return h_info
-    return None
+# REMOVED: Redundant local function _get_combined_user_info.
+# All calls now use combined_handler.get_combined_user_info
 
 def handle_show_user_summary(call, params):
     panel, identifier = params[0], ':'.join(params[1:])
@@ -66,39 +44,58 @@ def handle_ask_edit_value(call, params):
     bot.register_next_step_handler_by_chat_id(uid, apply_user_edit)
 
 def apply_user_edit(msg: types.Message):
+    """
+    Handles adding GB or days to a user across one or all panels.
+    This function has been completely rewritten for correctness.
+    """
     uid, text = msg.from_user.id, msg.text.strip()
     if uid not in admin_conversations: return
     convo = admin_conversations.pop(uid, {})
     identifier, edit_type, panel, msg_id = convo.get('identifier'), convo.get('edit_type'), convo.get('panel'), convo.get('msg_id')
     if not all([identifier, edit_type, panel, msg_id]): return
+    
     try:
         value = float(text)
-        success = False
-        info = _get_combined_user_info(identifier)
-        if not info: raise Exception("User not found")
-        if panel == 'hiddify': success = combined_handler.modify_user_relative(info['uuid'], add_gb=value if edit_type == "add_gb" else 0, add_days=int(value) if edit_type == "add_days" else 0)
-        elif panel == 'marzban': success = combined_handler.modify_user(info['name'], add_usage_gb=value if edit_type == "add_gb" else 0, add_days=int(value) if edit_type == "add_days" else 0)
+        add_gb = value if edit_type == "add_gb" else 0
+        add_days = int(value) if edit_type == "add_days" else 0
+
+        # FIX: Use the new centralized function to modify the user
+        success = combined_handler.modify_user_on_all_panels(
+            identifier=identifier,
+            add_gb=add_gb,
+            add_days=add_days,
+            target_panel=panel # Specify which panel to modify ('hiddify', 'marzban', or 'both')
+        )
+        
         if success:
-            new_info = _get_combined_user_info(identifier)
+            new_info = combined_handler.get_combined_user_info(identifier)
             text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ کاربر با موفقیت ویرایش شد.*"
-            kb = menu.admin_user_interactive_management(identifier, new_info['is_active'], panel)
+            # The original panel doesn't matter as much now, but we'll keep it for consistency
+            original_panel_for_menu = 'hiddify' if 'hiddify' in new_info.get('breakdown', {}) else 'marzban'
+            kb = menu.admin_user_interactive_management(identifier, new_info['is_active'], original_panel_for_menu)
             _safe_edit(uid, msg_id, text_to_show, reply_markup=kb)
-        else: raise Exception("API call failed")
+        else:
+            raise Exception("API call failed or user not found")
+            
     except Exception as e:
         logger.error(f"Failed to apply user edit for {identifier}: {e}")
-        _safe_edit(uid, msg_id, "❌ خطا در ویرایش کاربر.", reply_markup=menu.admin_user_interactive_management(identifier, True, panel))
+        # Get original info to show the menu again on failure
+        info = combined_handler.get_combined_user_info(identifier)
+        is_active = info.get('is_active', False) if info else False
+        _safe_edit(uid, msg_id, "❌ خطا در ویرایش کاربر.", reply_markup=menu.admin_user_interactive_management(identifier, is_active, panel))
 
 def handle_toggle_status(call, params):
     panel, identifier = params[0], ':'.join(params[1:])
-    info = _get_combined_user_info(identifier)
+    info = combined_handler.get_combined_user_info(identifier) # Use combined handler
     if not info: return
     new_status = not info.get('is_active', False)
     h_success, m_success = True, True
-    if 'hiddify' in info.get('breakdown', {}): h_success = combined_handler.modify_user(info['uuid'], data={'enable': new_status})
-    if 'marzban' in info.get('breakdown', {}): m_success = combined_handler.modify_user(info['name'], data={'status': 'active' if new_status else 'disabled'})
+    if 'hiddify' in info.get('breakdown', {}): h_success = combined_handler.hiddify_handler.modify_user(info['uuid'], data={'enable': new_status})
+    if 'marzban' in info.get('breakdown', {}): m_success = combined_handler.marzban_handler.modify_user(info['name'], data={'status': 'active' if new_status else 'disabled'})
+    
     if h_success and m_success:
         bot.answer_callback_query(call.id, "✅ وضعیت با موفقیت تغییر کرد.")
-        new_info = _get_combined_user_info(identifier)
+        new_info = combined_handler.get_combined_user_info(identifier) # Use combined handler
         if new_info: _safe_edit(call.from_user.id, call.message.message_id, fmt_admin_user_summary(new_info), reply_markup=menu.admin_user_interactive_management(identifier, new_info['is_active'], panel))
     else:
         bot.answer_callback_query(call.id, "❌ عملیات ناموفق بود.", show_alert=True)
@@ -109,7 +106,7 @@ def handle_reset_birthday(call, params):
     if user_id_to_reset:
         db.reset_user_birthday(user_id_to_reset)
         bot.answer_callback_query(call.id, "✅ تاریخ تولد کاربر ریست شد.")
-        info = _get_combined_user_info(identifier)
+        info = combined_handler.get_combined_user_info(identifier) # Use combined handler
         if info: _safe_edit(call.from_user.id, call.message.message_id, fmt_admin_user_summary(info), reply_markup=menu.admin_user_interactive_management(identifier, info['is_active'], panel))
     else:
         bot.answer_callback_query(call.id, "❌ خطا: کاربر در دیتابیس ربات یافت نشد.", show_alert=True)
@@ -120,16 +117,17 @@ def handle_reset_usage_menu(call, params):
 
 def handle_reset_usage_action(call, params):
     panel_to_reset, identifier = params[0], ':'.join(params[1:])
-    info = _get_combined_user_info(identifier)
+    info = combined_handler.get_combined_user_info(identifier) # Use combined handler
     if not info:
         bot.answer_callback_query(call.id, "❌ کاربر یافت نشد.", show_alert=True)
         return
     h_success, m_success = True, True
-    if panel_to_reset in ['h', 'both'] and 'hiddify' in info.get('breakdown', {}): h_success = combined_handler.reset_user_usage(info['uuid'])
-    if panel_to_reset in ['m', 'both'] and 'marzban' in info.get('breakdown', {}): m_success = combined_handler.reset_user_usage(info['name'])
+    if panel_to_reset in ['h', 'both'] and 'hiddify' in info.get('breakdown', {}): h_success = combined_handler.hiddify_handler.reset_user_usage(info['uuid'])
+    if panel_to_reset in ['m', 'both'] and 'marzban' in info.get('breakdown', {}): m_success = combined_handler.marzban_handler.reset_user_usage(info['name'])
+    
     if h_success and m_success:
         bot.answer_callback_query(call.id, "✅ مصرف کاربر با موفقیت صفر شد.")
-        new_info = _get_combined_user_info(identifier)
+        new_info = combined_handler.get_combined_user_info(identifier)
         if new_info:
             original_panel = 'hiddify' if 'hiddify' in new_info.get('breakdown', {}) else 'marzban'
             _safe_edit(call.from_user.id, call.message.message_id, fmt_admin_user_summary(new_info), reply_markup=menu.admin_user_interactive_management(identifier, new_info['is_active'], original_panel))
@@ -145,13 +143,13 @@ def handle_delete_user_action(call, params):
     action, panel, identifier = params[0], params[1], ':'.join(params[2:])
     uid, msg_id = call.from_user.id, call.message.message_id
     if action == "cancel":
-        info = _get_combined_user_info(identifier)
+        info = combined_handler.get_combined_user_info(identifier)
         if info: _safe_edit(uid, msg_id, fmt_admin_user_summary(info), reply_markup=menu.admin_user_interactive_management(identifier, info['is_active'], panel))
         else: _safe_edit(uid, msg_id, "عملیات لغو شد.", reply_markup=menu.admin_management_menu())
         return
     if action == "confirm":
         _safe_edit(uid, msg_id, "⏳ در حال حذف کامل کاربر...")
-        success = combined_handler.delete_user_from_all_panels(identifier) # <<-- تغییر کلیدی
+        success = combined_handler.delete_user_from_all_panels(identifier)
         if success:
             _safe_edit(uid, msg_id, "✅ کاربر با موفقیت از تمام پنل‌ها و ربات حذف شد.", reply_markup=menu.admin_management_menu())
         else:
@@ -175,7 +173,6 @@ def _handle_global_search_response(message: types.Message):
     original_msg_id = convo_data['msg_id']
     _safe_edit(uid, original_msg_id, "⏳ در حال جستجو...")
 
-    # استفاده از هندلر جستجوی جدید
     results = combined_handler.search_user(query)
 
     if not results:
@@ -186,7 +183,7 @@ def _handle_global_search_response(message: types.Message):
         user = results[0]
         panel = user['panel']
         identifier = user.get('uuid') or user.get('name')
-        info = combined_handler.user_info(identifier) if panel == 'hiddify' else combined_handler.get_user_by_username(identifier)
+        info = combined_handler.get_combined_user_info(identifier) # Use combined handler
         if info:
             text = fmt_admin_user_summary(info)
             kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
@@ -202,5 +199,3 @@ def _handle_global_search_response(message: types.Message):
             ))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:management_menu"))
         _safe_edit(uid, original_msg_id, "چندین کاربر یافت شد. لطفاً یکی را انتخاب کنید:", reply_markup=kb)
-
-

@@ -2,25 +2,13 @@ import pytz
 from datetime import datetime, timedelta
 from config import EMOJIS, PAGE_SIZE
 from database import db
-import jdatetime
 from utils import (
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid , format_datetime_for_user
+    format_relative_time, validate_uuid , format_raw_datetime
 )
 
-def format_shamsi_tehran(dt_obj: datetime | None) -> str:
-    if not dt_obj:
-        return "N/A"
-    
-    if dt_obj.tzinfo is None:
-        dt_obj = pytz.utc.localize(dt_obj)
-
-    tehran_tz = pytz.timezone('Asia/Tehran')
-    tehran_dt = dt_obj.astimezone(tehran_tz)
-    
-    shamsi_date = jdatetime.date.fromgregorian(date=tehran_dt)
-    
-    return f"{shamsi_date.strftime('%Y/%m/%d')} - {tehran_dt.strftime('%H:%M')}"
+# This function was not used and removed to avoid confusion.
+# def format_shamsi_tehran(dt_obj: datetime | None) -> str: ...
 
 def fmt_users_list(users: list, list_type: str, page: int) -> str:
     title_map = {
@@ -49,7 +37,7 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
         line = f"`•` *{name}*"
         
         if list_type == 'active':
-            last_online_str = format_datetime_for_user(user.get('last_online')).split(' - ')[-1]
+            last_online_str = format_raw_datetime(user.get('last_online')).split(' ')[-1]
             usage_p = user.get('usage_percentage', 0)
             line += f" `|` Last Seen: `{escape_markdown(last_online_str)}` `|` Usage: `{usage_p:.1f}%`"
 
@@ -124,19 +112,23 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
             active_users += 1
         total_usage_all += user_info.get("current_usage_GB", 0)
         
-        daily_usage_dict = db_manager.get_usage_since_midnight_by_uuid(user_info['uuid'])
-        total_daily_hiddify += daily_usage_dict.get('hiddify', 0.0)
-        total_daily_marzban += daily_usage_dict.get('marzban', 0.0)
-        
-        if user_info.get('is_active') and user_info.get('last_online') and user_info['last_online'].astimezone(pytz.utc) >= online_deadline:
+        # Ensure uuid exists before querying the database
+        if user_info.get('uuid'):
+            daily_usage_dict = db_manager.get_usage_since_midnight_by_uuid(user_info['uuid'])
+            total_daily_hiddify += daily_usage_dict.get('hiddify', 0.0)
+            total_daily_marzban += daily_usage_dict.get('marzban', 0.0)
+        else:
+            daily_usage_dict = {}
+
+        if user_info.get('is_active') and user_info.get('last_online') and isinstance(user_info.get('last_online'), datetime) and user_info['last_online'].astimezone(pytz.utc) >= online_deadline:
             user_info['daily_usage_dict'] = daily_usage_dict
             online_users.append(user_info)
 
         if user_info.get('expire') is not None and 0 <= user_info['expire'] <= 3:
             expiring_soon_users.append(user_info)
             
-        created_at = db_users_map.get(user_info['uuid'])
-        if created_at and (now_utc - created_at.astimezone(pytz.utc)).days < 1:
+        created_at = db_users_map.get(user_info.get('uuid'))
+        if created_at and isinstance(created_at, datetime) and (now_utc - created_at.astimezone(pytz.utc)).days < 1:
             new_users_today.append(user_info)
 
     total_daily_all = total_daily_hiddify + total_daily_marzban
@@ -147,7 +139,6 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
         f"\\- {EMOJIS['wifi']} کاربران آنلاین: *{len(online_users)}*",
         f"\\- {EMOJIS['chart']} *مجموع مصرف کل:* `{escape_markdown(f'{total_usage_all:.2f}')} GB`",
         f"\\- {EMOJIS['lightning']} *مصرف امروز کل:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
-        # بخش جدید برای نمایش تفکیک مصرف روزانه کل
         f"  `\\- 🇩🇪 آلمان:* `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
         f"  `\\- 🇫🇷 فرانسه:* `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
     ]
@@ -157,7 +148,6 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
         online_users.sort(key=lambda u: u.get('name', ''))
         for user in online_users:
             user_name = escape_markdown(user.get('name', 'کاربر ناشناس'))
-            # نمایش مصرف روزانه به تفکیک برای هر کاربر آنلاین
             daily_dict = user.get('daily_usage_dict', {})
             h_daily_str = escape_markdown(format_daily_usage(daily_dict.get('hiddify', 0.0)))
             m_daily_str = escape_markdown(format_daily_usage(daily_dict.get('marzban', 0.0)))
@@ -225,7 +215,8 @@ def fmt_bot_users_list(bot_users: list, page: int) -> str:
     total_users = len(bot_users)
     if total_users > PAGE_SIZE:
         total_pages = (total_users + PAGE_SIZE - 1) // PAGE_SIZE
-        pagination_text = f"(صفحه {page + 1} از {total_pages} | کل: {total_users})"
+        # FINAL FIX: Replaced problematic f-string with standard concatenation.
+        pagination_text = "(صفحه " + str(page + 1) + " از " + str(total_pages) + " | کل: " + str(total_users) + ")"
         header_text += f"\n{escape_markdown(pagination_text)}"
 
     lines = [header_text]
@@ -260,13 +251,8 @@ def fmt_birthdays_list(users: list, page: int) -> str:
     for user in paginated_users:
         name = escape_markdown(user.get('first_name', 'کاربر ناشناس'))
         gregorian_date = user['birthday']
-        shamsi_date = jdatetime.date.fromgregorian(date=gregorian_date)
-        
-        shamsi_str = shamsi_date.strftime('%Y/%m/%d')
         gregorian_str = gregorian_date.strftime('%Y-%m-%d')
-        
-        lines.append(f"`•` *{name}* `\\|` solar: `{shamsi_str}` `\\|` gregorian: `{gregorian_str}`")
-
+        lines.append(f"`•` *{name}* `\\|` gregorian: `{gregorian_str}`")
         
     return "\n".join(lines)
 
@@ -274,10 +260,8 @@ def fmt_marzban_system_stats(info: dict) -> str:
     if not info:
         return escape_markdown("اطلاعاتی از سیستم دریافت نشد\\.")
 
-    # Helper for GB conversion
     to_gb = lambda b: b / (1024**3)
 
-    # --- System Info ---
     version = info.get('version', 'N/A')
     mem_total_gb = to_gb(info.get('mem_total', 0))
     mem_used_gb = to_gb(info.get('mem_used', 0))
@@ -285,14 +269,12 @@ def fmt_marzban_system_stats(info: dict) -> str:
     cpu_cores = info.get('cpu_cores', 'N/A')
     cpu_usage = info.get('cpu_usage', 0.0)
 
-    # --- User Stats ---
     total_users = info.get('total_user', 0)
     online_users = info.get('online_users', 0)
     active_users = info.get('users_active', 0)
     disabled_users = info.get('users_disabled', 0)
     expired_users = info.get('users_expired', 0)
 
-    # --- Bandwidth Stats ---
     total_dl_gb = to_gb(info.get('incoming_bandwidth', 0))
     total_ul_gb = to_gb(info.get('outgoing_bandwidth', 0))
     speed_dl_mbps = info.get('incoming_bandwidth_speed', 0) / (1024 * 1024)
@@ -319,7 +301,6 @@ def fmt_marzban_system_stats(info: dict) -> str:
         f"  ↑ آپلود: {speed_ul_mbps:.2f} MB/s"
     )
     
-    # Escape the entire report to prevent any markdown errors
     return escape_markdown(report)
 
 def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
@@ -348,7 +329,6 @@ def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
 
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
-
 
 def fmt_admin_user_summary(info: dict) -> str:
     if not info:
@@ -379,10 +359,10 @@ def fmt_admin_user_summary(info: dict) -> str:
     m_info = info.get('breakdown', {}).get('marzban', {})
 
     if h_info:
-        h_limit_str = escape_markdown(f"{h_info.get('limit', 0):.2f}")
-        h_usage_str = escape_markdown(f"{h_info.get('usage', 0):.2f}")
-        h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0)))
-        h_last_online_str = escape_markdown(format_datetime_for_user(h_info.get('last_online')))
+        h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0):.2f}")
+        h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0):.2f}")
+        h_daily_str = escape_markdown(format_daily_usage(h_info.get('daily_usage', 0.0) if h_info.get('daily_usage') else 0.0))
+        h_last_online_str = escape_markdown(format_raw_datetime(h_info.get('last_online')))
         
         breakdown_lines.extend([
             "\nآلمان 🇩🇪",
@@ -392,10 +372,10 @@ def fmt_admin_user_summary(info: dict) -> str:
             f"⏰ آخرین اتصال : `{h_last_online_str}`"
         ])
     if m_info:
-        m_limit_str = escape_markdown(f"{m_info.get('limit', 0):.2f}")
-        m_usage_str = escape_markdown(f"{m_info.get('usage', 0):.2f}")
-        m_daily_str = escape_markdown(format_daily_usage(m_info.get('daily_usage', 0)))
-        m_last_online_str = escape_markdown(format_datetime_for_user(m_info.get('last_online')))
+        m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0):.2f}")
+        m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0):.2f}")
+        m_daily_str = escape_markdown(format_daily_usage(m_info.get('daily_usage', 0.0) if m_info.get('daily_usage') else 0.0))
+        m_last_online_str = escape_markdown(format_raw_datetime(m_info.get('last_online')))
         
         breakdown_lines.extend([
             "\nفرانسه 🇫🇷",
@@ -432,5 +412,3 @@ def fmt_admin_user_summary(info: dict) -> str:
     ]
 
     return "\n".join(report_parts)
-
-

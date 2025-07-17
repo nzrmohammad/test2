@@ -95,7 +95,7 @@ class DatabaseManager:
             )
 
     def get_usage_since_midnight(self, uuid_id: int) -> Dict[str, float]:
-        """Calculates daily usage for both panels with a single optimized query."""
+        """Calculates daily usage for both panels with a single, simplified, and robust query."""
         tehran_tz = pytz.timezone("Asia/Tehran")
         today_midnight_tehran = datetime.now(tehran_tz).replace(hour=0, minute=0, second=0, microsecond=0)
         today_midnight_utc = today_midnight_tehran.astimezone(pytz.utc)
@@ -103,27 +103,22 @@ class DatabaseManager:
         result = {'hiddify': 0.0, 'marzban': 0.0}
 
         with self._conn() as c:
-            # *** This is the new, optimized query ***
+            # *** FINAL FIX: Simplified and more robust query ***
             query = """
-                WITH SnapshotsToday AS (
-                    SELECT hiddify_usage_gb, marzban_usage_gb, taken_at
-                    FROM usage_snapshots
-                    WHERE uuid_id = ? AND taken_at >= ?
-                )
-                SELECT 
-                    (SELECT hiddify_usage_gb FROM SnapshotsToday ORDER BY taken_at DESC LIMIT 1) as h_end,
-                    (SELECT hiddify_usage_gb FROM SnapshotsToday ORDER BY taken_at ASC LIMIT 1) as h_start,
-                    (SELECT marzban_usage_gb FROM SnapshotsToday ORDER BY taken_at DESC LIMIT 1) as m_end,
-                    (SELECT marzban_usage_gb FROM SnapshotsToday ORDER BY taken_at ASC LIMIT 1) as m_start;
+                SELECT
+                    (MAX(hiddify_usage_gb) - MIN(hiddify_usage_gb)) as h_diff,
+                    (MAX(marzban_usage_gb) - MIN(marzban_usage_gb)) as m_diff
+                FROM usage_snapshots
+                WHERE uuid_id = ? AND taken_at >= ?;
             """
             params = (uuid_id, today_midnight_utc)
             row = c.execute(query, params).fetchone()
 
             if row:
-                if row['h_start'] is not None and row['h_end'] is not None:
-                    result['hiddify'] = max(0, row['h_end'] - row['h_start'])
-                if row['m_start'] is not None and row['m_end'] is not None:
-                    result['marzban'] = max(0, row['m_end'] - row['m_start'])
+                # Use max(0, ...) to prevent negative results if usage resets during the day
+                result['hiddify'] = max(0, row['h_diff'] or 0.0)
+                result['marzban'] = max(0, row['m_diff'] or 0.0)
+
         return result
     
     def get_panel_usage_in_intervals(self, uuid_id: int, panel_name: str) -> Dict[int, float]:

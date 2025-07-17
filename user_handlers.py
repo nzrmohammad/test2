@@ -1,11 +1,13 @@
 import logging
 from telebot import types, telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime
 from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS
 from database import db
 import combined_handler 
 from menu import menu
-from utils import validate_uuid, escape_markdown, shamsi_to_gregorian, load_custom_links, _safe_edit
+# FINAL FIX: Removed 'shamsi_to_gregorian' from imports to prevent crash.
+from utils import validate_uuid, escape_markdown, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ def _save_first_uuid(message: types.Message):
         if m: bot.register_next_step_handler(m, _save_first_uuid)
         return
         
-    info = combined_handler.user_info(uuid_str)
+    info = combined_handler.get_combined_user_info(uuid_str)
     if not info:
         m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
@@ -50,7 +52,7 @@ def _add_uuid_step(message: types.Message):
         if m: bot.register_next_step_handler(m, _add_uuid_step)
         return
 
-    info = combined_handler.user_info(uuid_str)
+    info = combined_handler.get_combined_user_info(uuid_str)
     if not info:
         m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید یا عملیات را لغو کنید\\.", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _add_uuid_step)
@@ -62,14 +64,15 @@ def _add_uuid_step(message: types.Message):
 def _get_birthday_step(message: types.Message):
     uid = message.from_user.id
     birthday_str = message.text.strip()
-    gregorian_date = shamsi_to_gregorian(birthday_str)
     
-    if gregorian_date:
+    # FINAL FIX: Switched to parsing Gregorian date format (YYYY-MM-DD).
+    try:
+        gregorian_date = datetime.strptime(birthday_str, '%Y-%m-%d').date()
         db.update_user_birthday(uid, gregorian_date)
-        bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد\\. منتظر هدیه خود باشید\\!",
+        bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد\\.",
                          reply_markup=menu.main(uid in ADMIN_IDS, has_birthday=True), parse_mode="MarkdownV2")
-    else:
-        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل `1375/06/15` وارد کنید\\.", parse_mode="MarkdownV2")
+    except ValueError:
+        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل `YYYY-MM-DD` وارد کنید \\(مثلاً `1990-08-27`\\)\\.", parse_mode="MarkdownV2")
         bot.clear_step_handler_by_chat_id(uid)
         if m: bot.register_next_step_handler(m, _get_birthday_step)
 
@@ -97,7 +100,7 @@ def _go_back_to_main(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, "🏠 *منوی اصلی*", reply_markup=menu.main(call.from_user.id in ADMIN_IDS, has_birthday))
 
 def _handle_birthday_gift_request(call: types.CallbackQuery):
-    prompt = "لطفاً تاریخ تولد خود را به شمسی و با فرمت `سال/ماه/روز` وارد کنید \\(مثلاً: `1375/06/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
+    prompt = "لطفاً تاریخ تولد خود را به فرمت میلادی `YYYY-MM-DD` وارد کنید \\(مثلاً: `1990-08-27`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
     _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
     bot.register_next_step_handler_by_chat_id(call.from_user.id, _get_birthday_step)
 
