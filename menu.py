@@ -7,29 +7,24 @@ class Menu:
     # =============================================================================
     # User Panel Menus
     # =============================================================================
-    def main(self, is_admin: bool, has_birthday: bool = False) -> types.InlineKeyboardMarkup:
-            kb = types.InlineKeyboardMarkup(row_width=2)
-            kb.add(
-                types.InlineKeyboardButton(f"{EMOJIS['key']} مدیریت اکانت", callback_data="manage"),
-                types.InlineKeyboardButton(f"{EMOJIS['lightning']} آمار فوری", callback_data="quick_stats")
-            )
+    def main(self, is_admin: bool) -> types.InlineKeyboardMarkup:
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton(f"{EMOJIS['key']} مدیریت اکانت", callback_data="manage"),
+            types.InlineKeyboardButton(f"{EMOJIS['lightning']} آمار فوری", callback_data="quick_stats")
+        )
 
-            btn_services = types.InlineKeyboardButton(f"{EMOJIS['money']} مشاهده سرویس ها", callback_data="view_plans")
-            btn_settings = types.InlineKeyboardButton(f"{EMOJIS['bell']} تنظیمات", callback_data="settings")
-            btn_birthday = types.InlineKeyboardButton("🎁 هدیه تولد", callback_data="birthday_gift")
-            
-            btn_support = types.InlineKeyboardButton("💬 پشتیبانی", callback_data="support")
+        btn_services = types.InlineKeyboardButton(f"{EMOJIS['money']} مشاهده سرویس ها", callback_data="view_plans")
+        btn_settings = types.InlineKeyboardButton(f"{EMOJIS['bell']} تنظیمات", callback_data="settings")
+        btn_birthday = types.InlineKeyboardButton("🎁 هدیه تولد", callback_data="birthday_gift")
+        btn_support = types.InlineKeyboardButton("💬 پشتیبانی", callback_data="support")
 
-            if not has_birthday:
-                kb.add(btn_settings, btn_services)
-                kb.add(btn_birthday, btn_support)
-            else:
-                kb.add(btn_settings, btn_services)
-                kb.add(btn_support)
+        kb.add(btn_settings, btn_services)
+        kb.add(btn_birthday, btn_support)
 
-            if is_admin:
-                kb.add(types.InlineKeyboardButton(f"{EMOJIS['crown']} پنل مدیریت", callback_data="admin:panel"))
-            return kb
+        if is_admin:
+            kb.add(types.InlineKeyboardButton(f"{EMOJIS['crown']} پنل مدیریت", callback_data="admin:panel"))
+        return kb
 
     def accounts(self, rows) -> types.InlineKeyboardMarkup:
             kb = types.InlineKeyboardMarkup(row_width=1)
@@ -119,7 +114,6 @@ class Menu:
     ### 1. Main Navigation ###
     def admin_panel(self) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
-        # **تغییر:** `select_server:reports_menu` به `reports_menu` تغییر کرد تا مستقیم منوی جدید را باز کند
         kb.add(
             types.InlineKeyboardButton("📜 گزارش گیری", callback_data="admin:reports_menu"),
             types.InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin:management_menu")
@@ -129,12 +123,12 @@ class Menu:
             types.InlineKeyboardButton("📤 پیام همگانی", callback_data="admin:broadcast")
         )
         kb.add(
-            types.InlineKeyboardButton("🎂 تولد کاربران", callback_data="admin:list:birthdays:0"),
-            types.InlineKeyboardButton("🗄️ پشتیبان‌گیری", callback_data="admin:backup_menu")
+            types.InlineKeyboardButton("🗄️ پشتیبان‌گیری", callback_data="admin:backup_menu"),
+            types.InlineKeyboardButton("🔄 رفرش مپینگ مرزبان", callback_data="admin:reload_maps")
         )
-        kb.add(types.InlineKeyboardButton("🔄 رفرش مپینگ مرزبان", callback_data="admin:reload_maps"))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back"))
         return kb
+
 
     def admin_server_selection_menu(self, base_callback: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
@@ -226,7 +220,9 @@ class Menu:
              types.InlineKeyboardButton("💳 گزارش پرداخت‌ها", callback_data="admin:list:payments:0")
         )
         kb.add(
-             types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0")
+             types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"),
+             # --- NEW BUTTON ADDED HERE ---
+             types.InlineKeyboardButton("🎂 تولد کاربران", callback_data="admin:list:birthdays:0")
         )
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل اصلی", callback_data="admin:panel"))
         return kb

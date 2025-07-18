@@ -6,7 +6,7 @@ from datetime import datetime
 from utils import (
     create_progress_bar,
     format_daily_usage, escape_markdown,
-    load_service_plans, format_raw_datetime, format_shamsi_tehran
+    load_service_plans, format_raw_datetime, format_shamsi_tehran, gregorian_to_shamsi_str, days_until_next_birthday
 )
 
 def fmt_one(info: dict, daily_usage_dict: dict) -> str:
@@ -250,5 +250,34 @@ def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
     for payment in paginated_payments:
         shamsi_datetime = format_shamsi_tehran(payment.get('payment_date'))
         lines.append(f"`•` تاریخ تمدید: `{shamsi_datetime}`")
+
+    return "\n".join(lines)
+
+def fmt_registered_birthday_info(user_data: dict) -> str:
+    """
+    Creates a beautiful message for users who have already registered their birthday.
+    """
+    if not user_data or not user_data.get('birthday'):
+        return "خطایی در دریافت اطلاعات تولد رخ داد."
+
+    birthday_obj = user_data['birthday']
+    shamsi_date_str = gregorian_to_shamsi_str(birthday_obj)
+    remaining_days = days_until_next_birthday(birthday_obj)
+
+    header = "🎁 *وضعیت هدیه تولد شما*"
+    
+    lines = [header, "`────────────────────`"]
+    
+    lines.append(f"تاریخ ثبت شده: *{shamsi_date_str}*")
+
+    if remaining_days is not None:
+        if remaining_days == 0:
+            lines.append("شمارش معکوس: *امروز تولد شماست\\! 🎉*")
+            lines.append("\nهدیه شما به صورت خودکار به اکانتتان اضافه شده است\\.")
+        else:
+            lines.append(f"شمارش معکوس: *{remaining_days} روز* تا تولد بعدی شما باقی مانده است\\.")
+    
+    lines.append("`────────────────────`")
+    lines.append("⚠️ *نکته:* تاریخ تولد ثبت شده قابل ویرایش نیست\\. در صورت ورود اشتباه، لطفاً به ادمین اطلاع دهید\\.")
 
     return "\n".join(lines)

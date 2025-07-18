@@ -8,7 +8,7 @@ from database import db
 import combined_handler 
 from menu import menu
 from utils import validate_uuid, escape_markdown, load_custom_links, _safe_edit
-from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats, fmt_user_payment_history
+from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats, fmt_user_payment_history, fmt_registered_birthday_info 
 from utils import load_service_plans
 import io # Add this to the top of the file
 import qrcode # Add this to the top of the file
@@ -32,9 +32,7 @@ def _save_first_uuid(message: types.Message):
     status_message = db.add_uuid(uid, uuid_str, info.get("name", "کاربر ناشناس"))
     
     if "✅" in status_message:
-        user_data = db.user(uid)
-        has_birthday = bool(user_data and user_data.get('birthday'))
-        bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.main(uid in ADMIN_IDS, has_birthday), parse_mode="MarkdownV2")
+        bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
     else:
         bot.send_message(uid, escape_markdown(status_message), parse_mode="MarkdownV2")
         m = bot.send_message(uid, "لطفاً یک `UUID` دیگر وارد کنید\\.", parse_mode="MarkdownV2")
@@ -111,14 +109,23 @@ def _show_settings(call: types.CallbackQuery):
 
 def _go_back_to_main(call: types.CallbackQuery):
     user_data = db.user(call.from_user.id)
+    # The has_birthday variable is no longer needed for the menu call
     has_birthday = bool(user_data and user_data.get('birthday'))
-    _safe_edit(call.from_user.id, call.message.message_id, "🏠 *منوی اصلی*", reply_markup=menu.main(call.from_user.id in ADMIN_IDS, has_birthday))
+    # --- FIX: Removed the 'has_birthday' argument ---
+    _safe_edit(call.from_user.id, call.message.message_id, "🏠 *منوی اصلی*", reply_markup=menu.main(call.from_user.id in ADMIN_IDS))
 
 def _handle_birthday_gift_request(call: types.CallbackQuery):
-    # --- MODIFIED: Updated prompt for Shamsi format ---
-    prompt = "لطفاً تاریخ تولد خود را به فرمت **شمسی** `YYYY/MM/DD` وارد کنید \\(مثلاً: `1370/01/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
-    _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
-    bot.register_next_step_handler_by_chat_id(call.from_user.id, _get_birthday_step)
+    uid = call.from_user.id
+    user_data = db.user(uid)
+    
+    if user_data and user_data.get('birthday'):
+        text = fmt_registered_birthday_info(user_data)
+        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
+        _safe_edit(uid, call.message.message_id, text, reply_markup=kb)
+    else:
+        prompt = "لطفاً تاریخ تولد خود را به فرمت **شمسی** `YYYY/MM/DD` وارد کنید \\(مثلاً: `1370/01/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
+        _safe_edit(uid, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
+        bot.register_next_step_handler_by_chat_id(uid, _get_birthday_step)
 
 def _show_plans(call: types.CallbackQuery):
     text = fmt_service_plans()
@@ -292,11 +299,12 @@ def register_user_handlers(b: telebot.TeleBot):
         log_adapter = logging.LoggerAdapter(logger, {'user_id': uid})
         log_adapter.info("User started the bot.")
         db.add_or_update_user(uid, msg.from_user.username, msg.from_user.first_name, msg.from_user.last_name)
-        user_data = db.user(uid)
-        has_birthday = bool(user_data and user_data.get('birthday'))
+        
+        welcome_message = "🏠 *به منوی اصلی خوش آمدید*"
 
         if db.uuids(uid):
-            bot.send_message(uid, "🏠 *به منوی اصلی خوش آمدید*", reply_markup=menu.main(uid in ADMIN_IDS, has_birthday), parse_mode="MarkdownV2")
+            # --- FIX: Removed the 'has_birthday' argument from the call ---
+            bot.send_message(uid, welcome_message, reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
         else:
             m = bot.send_message(uid, "👋 *خوش آمدید\\!*\n\nلطفاً `UUID` اکانت خود را ارسال کنید\\.", parse_mode="MarkdownV2")
             if m: bot.register_next_step_handler(m, _save_first_uuid)

@@ -92,14 +92,14 @@ def handle_paginated_list(call, params):
 
     list_configs = {
         "panel_users": {"format": lambda u, pg, p: fmt_panel_users_list(u, "آلمان 🇩🇪" if p == "hiddify" else "فرانسه 🇫🇷", pg), "back": "manage_panel"},
-        "online_users": {"format": fmt_online_users_list, "back": "panel_reports"}, # بازگشت به منوی گزارش‌های پنل
+        "online_users": {"format": fmt_online_users_list, "back": "panel_reports"},
         "active_users": {"format": lambda u, pg, p: fmt_users_list(u, 'active', pg), "back": "panel_reports"},
         "inactive_users": {"format": lambda u, pg, p: fmt_users_list(u, 'inactive', pg), "back": "panel_reports"},
         "never_connected": {"format": lambda u, pg, p: fmt_users_list(u, 'never_connected', pg), "back": "panel_reports"},
         "top_consumers": {"format": fmt_top_consumers, "back": "analytics_menu"},
-        "bot_users": {"format": fmt_bot_users_list, "back": "reports_menu"}, # بازگشت به منوی اصلی گزارش‌گیری
-        "birthdays": {"format": fmt_birthdays_list, "back": "admin:panel"}, # بازگشت به پنل ادمین
-        "payments": {"format": fmt_payments_report_list, "back": "reports_menu"}, # بازگشت به منوی اصلی گزارش‌گیری
+        "bot_users": {"format": fmt_bot_users_list, "back": "reports_menu"},
+        "birthdays": {"format": fmt_birthdays_list, "back": "reports_menu"},
+        "payments": {"format": fmt_payments_report_list, "back": "reports_menu"},
     }
     
     config = list_configs.get(list_type)
@@ -110,7 +110,7 @@ def handle_paginated_list(call, params):
     base_cb = f"admin:list:{list_type}" + (f":{panel}" if panel else "")
     
     back_cb = f"admin:{config['back']}"
-    if config['back'] in ['panel_reports', 'analytics_menu']:
+    if config['back'] in ['panel_reports', 'analytics_menu', 'manage_panel']:
          back_cb += f":{panel}"
          
     kb = menu.create_pagination_menu(base_cb, page, len(users), back_cb)

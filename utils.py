@@ -127,3 +127,15 @@ def gregorian_to_shamsi_str(gregorian_date: Optional[datetime.date]) -> str:
         
     j_date = jdatetime.datetime.fromgregorian(datetime=gregorian_date)
     return j_date.strftime('%Y/%m/%d')
+
+def days_until_next_birthday(birthday: Optional[datetime.date]) -> Optional[int]:
+    if not birthday:
+        return None
+    
+    today = datetime.now().date()
+    next_birthday = birthday.replace(year=today.year)
+    
+    if next_birthday < today:
+        next_birthday = next_birthday.replace(year=today.year + 1)
+        
+    return (next_birthday - today).days

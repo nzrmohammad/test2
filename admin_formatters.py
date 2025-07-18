@@ -5,7 +5,7 @@ from config import EMOJIS, PAGE_SIZE
 from database import db
 from utils import (
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar, format_shamsi_tehran, gregorian_to_shamsi_str
+    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar, format_shamsi_tehran, gregorian_to_shamsi_str, days_until_next_birthday 
 )
 
 
@@ -248,10 +248,14 @@ def fmt_birthdays_list(users: list, page: int) -> str:
 
     for user in paginated_users:
         name = escape_markdown(user.get('first_name', 'کاربر ناشناس'))
-        # --- MODIFIED: Use the new helper to display Shamsi date ---
         birthday_obj = user.get('birthday')
+        
         shamsi_str = gregorian_to_shamsi_str(birthday_obj)
-        lines.append(f"`•` *{name}* `\\|` 🎂 تاریخ تولد: `{shamsi_str}`")
+        
+        remaining_days = days_until_next_birthday(birthday_obj)
+        days_str = f"{remaining_days} روز" if remaining_days is not None else "نامشخص"
+        
+        lines.append(f"🎂 *{name}* `|` {shamsi_str} `|` {escape_markdown(days_str)}")
         
     return "\n".join(lines)
 
