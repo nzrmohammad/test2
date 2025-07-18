@@ -182,26 +182,36 @@ def fmt_user_report(user_infos: list) -> str:
     
     return f"{report_body}\n\n" + "\n".join(footer)
 
-def fmt_service_plans() -> str:
+def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
     """
-    Formats the service plans with the requested layout including country names.
+    لیست پلن‌های سرویس را برای نمایش به کاربر فرمت می‌کند.
     """
-    SERVICE_PLANS = load_service_plans()
-    if not SERVICE_PLANS:
-        return "در حال حاضر پلن فعالی برای نمایش وجود ندارد\\."
+    if not plans_to_show:
+        return "در حال حاضر پلن فعالی برای نمایش در این دسته وجود ندارد."
     
-    lines = [f"*{EMOJIS['rocket']} پلن‌های فروش سرویس*"]
+    type_title = "ترکیبی" if plan_type == "combined" else "آلمان"
     
-    for plan in SERVICE_PLANS:
+    # **تغییر اصلی: escape کردن پرانتزها و محتوای داخل آنها در عنوان**
+    title_text = f"*{EMOJIS['rocket']} پلن‌های فروش سرویس \\({escape_markdown(type_title)}\\)*"
+    lines = [title_text]
+    
+    for plan in plans_to_show:
         lines.append("`────────────────────`")
-        lines.append(f"*{escape_markdown(plan['name'])}*")
-        lines.append(f"حجم کل: *{escape_markdown(plan['total_volume'])}*")
-        lines.append(f"آلمان : *{escape_markdown(plan['volume_de'])}*")
-        lines.append(f"فرانسه : *{escape_markdown(plan['volume_fr'])}*")
+        lines.append(f"*{escape_markdown(plan.get('name'))}*")
+        
+        if plan.get('total_volume'):
+            lines.append(f"حجم کل: *{escape_markdown(plan['total_volume'])}*")
+        if plan.get('volume_de'):
+            lines.append(f"آلمان: *{escape_markdown(plan['volume_de'])}*")
+        if plan.get('volume_fr'):
+            lines.append(f"فرانسه: *{escape_markdown(plan['volume_fr'])}*")
+            
         lines.append(f"مدت زمان: *{escape_markdown(plan['duration'])}*")
                 
     lines.append("`────────────────────`")
-    lines.append(escape_markdown("نکته : حجم 🇫🇷 قابل تبدیل به 🇩🇪 هست ولی 🇩🇪 قابل تبدیل به 🇫🇷 نیست"))
+    if plan_type == "combined":
+        lines.append(escape_markdown("نکته: حجم 🇫🇷 قابل تبدیل به 🇩🇪 هست ولی 🇩🇪 قابل تبدیل به 🇫🇷 نیست."))
+    
     lines.append(escape_markdown("برای اطلاع از قیمت‌ها و دریافت مشاوره، لطفاً به ادمین پیام دهید."))
     
     return "\n".join(lines)

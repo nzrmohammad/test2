@@ -54,6 +54,8 @@ class DatabaseManager:
                                     is_active INTEGER DEFAULT 1,
                                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                     updated_at TIMESTAMP,
+                                    first_connection_time TIMESTAMP, -- ستون جدید
+                                    welcome_message_sent INTEGER DEFAULT 0, -- ستون جدید
                                     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
                                 );
                                 CREATE TABLE IF NOT EXISTS usage_snapshots (
@@ -78,6 +80,12 @@ class DatabaseManager:
                                     warning_type TEXT NOT NULL, -- e.g., 'expiry', 'low_data_hiddify'
                                     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                     UNIQUE(uuid_id, warning_type)
+                                );
+                                CREATE TABLE IF NOT EXISTS payments (
+                                    payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    uuid_id INTEGER NOT NULL,
+                                    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    FOREIGN KEY(uuid_id) REFERENCES user_uuids(id) ON DELETE CASCADE
                                 );
                                     CREATE INDEX IF NOT EXISTS idx_user_uuids_uuid ON user_uuids(uuid);
                                     CREATE INDEX IF NOT EXISTS idx_user_uuids_user_id ON user_uuids(user_id);
@@ -367,5 +375,40 @@ class DatabaseManager:
         with self._conn() as c:
             c.execute("DELETE FROM usage_snapshots WHERE uuid_id = ? AND taken_at >= ?", (uuid_id, today_start_utc))
             logger.info(f"Deleted daily snapshots for uuid_id {uuid_id}.")
+
+    def set_first_connection_time(self, uuid_id: int, time: datetime):
+        with self._conn() as c:
+            c.execute("UPDATE user_uuids SET first_connection_time = ? WHERE id = ?", (time, uuid_id))
+
+    def mark_welcome_message_as_sent(self, uuid_id: int):
+        with self._conn() as c:
+            c.execute("UPDATE user_uuids SET welcome_message_sent = 1 WHERE id = ?", (uuid_id,))
+
+    def add_payment_record(self, uuid_id: int) -> bool:
+        """یک رکورد پرداخت برای کاربر با تاریخ فعلی ثبت می‌کند."""
+        with self._conn() as c:
+            c.execute("INSERT INTO payments (uuid_id, payment_date) VALUES (?, ?)",
+                      (uuid_id, datetime.now(pytz.utc)))
+            return True
+
+    def get_payment_history(self) -> List[Dict[str, Any]]:
+        """لیست تمام کاربرانی که پرداخت ثبت‌شده دارند را به همراه آخرین تاریخ پرداختشان برمی‌گرداند."""
+        query = """
+            SELECT uu.name, p.payment_date
+            FROM payments p
+            JOIN user_uuids uu ON p.uuid_id = uu.id
+            WHERE uu.is_active = 1
+            GROUP BY p.uuid_id
+            ORDER BY p.payment_date DESC;
+        """
+        with self._conn() as c:
+            rows = c.execute(query).fetchall()
+            return [dict(r) for r in rows]
+        
+    def get_user_payment_history(self, uuid_id: int) -> List[Dict[str, Any]]:
+            """تمام رکوردهای پرداخت برای یک کاربر خاص را برمی‌گرداند."""
+            with self._conn() as c:
+                rows = c.execute("SELECT payment_date FROM payments WHERE uuid_id = ? ORDER BY payment_date DESC", (uuid_id,)).fetchall()
+                return [dict(r) for r in rows]
 
 db = DatabaseManager()

@@ -6,9 +6,9 @@ from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS
 from database import db
 import combined_handler 
 from menu import menu
-# FINAL FIX: Removed 'shamsi_to_gregorian' from imports to prevent crash.
 from utils import validate_uuid, escape_markdown, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
+from utils import load_service_plans
 
 logger = logging.getLogger(__name__)
 bot = telebot.TeleBot("YOUR_BOT_TOKEN")
@@ -110,6 +110,27 @@ def _show_plans(call: types.CallbackQuery):
     kb.add(InlineKeyboardButton(f"{EMOJIS['home']} بازگشت به منوی اصلی", callback_data="back"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
+def _show_plan_categories(call: types.CallbackQuery):
+    """منوی انتخاب دسته‌بندی پلن‌ها را نمایش می‌دهد."""
+    prompt = "لطفاً دسته‌بندی سرویس مورد نظر خود را انتخاب کنید:"
+    _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.plan_category_menu())
+
+# تابع جدید برای نمایش پلن‌های فیلتر شده
+def _show_filtered_plans(call: types.CallbackQuery):
+    """پلن‌ها را بر اساس نوع فیلتر کرده و نمایش می‌دهد."""
+    plan_type = call.data.split(":")[1] # مثلا 'combined' or 'germany'
+    
+    all_plans = load_service_plans()
+    # فیلتر کردن پلن‌ها بر اساس نوع
+    filtered_plans = [p for p in all_plans if p.get("type") == plan_type]
+    
+    text = fmt_service_plans(filtered_plans, plan_type)
+    
+    # دکمه بازگشت به منوی انتخاب دسته‌بندی
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data="view_plans"))
+    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
+
 USER_CALLBACK_MAP = {
     "add": _handle_add_uuid_request,
     "manage": _show_manage_menu,
@@ -117,7 +138,7 @@ USER_CALLBACK_MAP = {
     "settings": _show_settings,
     "back": _go_back_to_main,
     "birthday_gift": _handle_birthday_gift_request,
-    "view_plans": _show_plans,
+    "view_plans": _show_plan_categories,
 }
 
 def handle_user_callbacks(call: types.CallbackQuery):
@@ -206,6 +227,10 @@ def handle_user_callbacks(call: types.CallbackQuery):
         text, menu_data = quick_stats(db.uuids(uid), page=page)
         reply_markup = menu.quick_stats_menu(menu_data['num_accounts'], menu_data['current_page'])
         _safe_edit(uid, msg_id, text, reply_markup=reply_markup)
+
+    if data.startswith("show_plans:"):
+        _show_filtered_plans(call)
+        return
 
 def register_user_handlers(b: telebot.TeleBot):
     """Registers all message handlers for regular users."""

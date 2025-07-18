@@ -1,0 +1,112 @@
+import logging
+from telebot import types
+
+from menu import menu
+from utils import _safe_edit, load_service_plans, parse_volume_string, escape_markdown
+import combined_handler
+
+logger = logging.getLogger(__name__)
+bot, admin_conversations = None, None
+
+def initialize_group_actions_handlers(b, conv_dict):
+    global bot, admin_conversations
+    bot = b
+    admin_conversations = conv_dict
+
+def handle_select_plan_for_action(call, params):
+    uid, msg_id = call.from_user.id, call.message.message_id
+    prompt = "لطفاً پلنی که می‌خواهید دستور روی کاربران آن اجرا شود را انتخاب کنید:"
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_select_plan_for_action_menu())
+
+def handle_ask_action_value(call, params):
+    action_type, plan_index = params[0], int(params[1])
+    uid, msg_id = call.from_user.id, call.message.message_id
+
+    all_plans = load_service_plans()
+    selected_plan = all_plans[plan_index]
+
+    plan_vol_de = float(parse_volume_string(selected_plan.get('volume_de', '0')))
+    plan_vol_fr = float(parse_volume_string(selected_plan.get('volume_fr', '0')))
+    all_users = combined_handler.get_all_users_combined()
+    
+    target_users = []
+    for user in all_users:
+        h_info = user.get('breakdown', {}).get('hiddify', {})
+        m_info = user.get('breakdown', {}).get('marzban', {})
+        user_vol_de = h_info.get('usage_limit_GB', -1.0)
+        user_vol_fr = m_info.get('usage_limit_GB', -1.0)
+        if user_vol_de == plan_vol_de and user_vol_fr == plan_vol_fr:
+            target_users.append(user)
+
+    if not target_users:
+        plan_name_escaped = escape_markdown(selected_plan.get('name', ''))
+        prompt = f"❌ هیچ کاربری با مشخصات پلن *{plan_name_escaped}* یافت نشد."
+        _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_select_plan_for_action_menu())
+        return
+
+    admin_conversations[uid] = {
+        'action_type': action_type,
+        'plan': selected_plan,
+        'msg_id': msg_id,
+        'target_users': target_users
+    }
+
+    plan_name_escaped = escape_markdown(selected_plan.get('name', ''))
+    user_count = len(target_users)
+    
+    prompt_map = {
+        "add_gb": "حجم (GB)",
+        "add_days": "تعداد روز"
+    }
+    value_type_str = escape_markdown(prompt_map.get(action_type, "مقدار"))
+
+    prompt = (f"شما پلن *{plan_name_escaped}* را انتخاب کردید \\(شامل *{user_count}* کاربر\\)\\.\n\n"
+              f"حالا لطفاً مقدار *{value_type_str}* که می‌خواهید به این کاربران اضافه شود را وارد کنید:")
+    
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action(f"admin:ga_select_type:{plan_index}"))
+    bot.register_next_step_handler_by_chat_id(uid, _apply_group_action)
+
+def _apply_group_action(message: types.Message):
+    uid, text = message.from_user.id, message.text.strip()
+    if uid not in admin_conversations: return
+    
+    convo_data = admin_conversations.pop(uid, {})
+    msg_id = convo_data['msg_id']
+    plan = convo_data['plan']
+    action_type = convo_data['action_type']
+    target_users = convo_data['target_users']
+
+    try:
+        value = float(text)
+    except ValueError:
+        _safe_edit(uid, msg_id, "❌ مقدار وارد شده نامعتبر است. لطفاً یک عدد وارد کنید.", reply_markup=menu.admin_plan_analytics_menu())
+        return
+
+    _safe_edit(uid, msg_id, f"⏳ در حال اجرای دستور روی *{len(target_users)}* کاربر...")
+
+    add_gb = value if action_type == 'add_gb' else 0
+    add_days = int(value) if action_type == 'add_days' else 0
+
+    success_count, fail_count = 0, 0
+    for user in target_users:
+        identifier = user.get('uuid') or user.get('name')
+        if combined_handler.modify_user_on_all_panels(identifier, add_gb=add_gb, add_days=add_days):
+            success_count += 1
+        else:
+            fail_count += 1
+
+    final_text = (f"✅ عملیات گروهی با موفقیت انجام شد.\n\n"
+                  f"به *{success_count}* کاربر اعمال شد.\n"
+                  f"عملیات برای *{fail_count}* کاربر ناموفق بود.")
+    _safe_edit(uid, msg_id, final_text, reply_markup=menu.admin_plan_analytics_menu())
+
+def handle_select_action_type(call, params):
+    plan_index = int(params[0])
+    uid, msg_id = call.from_user.id, call.message.message_id
+    
+    all_plans = load_service_plans()
+    selected_plan = all_plans[plan_index]
+    plan_name_escaped = escape_markdown(selected_plan.get('name', ''))
+
+    prompt = f"شما پلن *{plan_name_escaped}* را انتخاب کردید.\n\nلطفاً نوع دستور مورد نظر را انتخاب کنید:"
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_select_action_type_menu(plan_index))

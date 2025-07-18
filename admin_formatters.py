@@ -213,7 +213,6 @@ def fmt_bot_users_list(bot_users: list, page: int) -> str:
     total_users = len(bot_users)
     if total_users > PAGE_SIZE:
         total_pages = (total_users + PAGE_SIZE - 1) // PAGE_SIZE
-        # FINAL FIX: Replaced problematic f-string with standard concatenation.
         pagination_text = "(صفحه " + str(page + 1) + " از " + str(total_pages) + " | کل: " + str(total_users) + ")"
         header_text += f"\n{escape_markdown(pagination_text)}"
 
@@ -408,3 +407,91 @@ def fmt_admin_user_summary(info: dict) -> str:
     report_parts.append(f"\nوضعیت : {status_bar_line}")
 
     return "\n".join(report_parts)
+
+def fmt_users_by_plan_list(users: list, plan_name: str, page: int) -> str:
+    title = f"گزارش کاربران پلن: {escape_markdown(plan_name)}"
+    
+    if not users:
+        return f"*{title}*\n\nهیچ کاربری با مشخصات این پلن یافت نشد\\."
+
+    header_text = f"*{title}*"
+    if len(users) > PAGE_SIZE:
+        total_pages = (len(users) + PAGE_SIZE - 1) // PAGE_SIZE
+        pagination_text = f"(صفحه {page + 1} از {total_pages} | کل: {len(users)})"
+        header_text += f"\n{escape_markdown(pagination_text)}"
+
+    user_lines = [header_text]
+    paginated_users = users[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+    for user in paginated_users:
+        name = escape_markdown(user.get('name', 'کاربر ناشناس'))
+        
+        h_info = user.get('breakdown', {}).get('hiddify', {})
+        m_info = user.get('breakdown', {}).get('marzban', {})
+
+        # آمار پنل آلمان
+        h_usage_gb = h_info.get('current_usage_GB', 0.0)
+        h_limit_gb = h_info.get('usage_limit_GB', 0.0)
+        h_usage_str = escape_markdown(f"{h_usage_gb:.2f}")
+        h_limit_str = escape_markdown(f"{h_limit_gb:.2f}")
+        
+        # آمار پنل فرانسه
+        m_usage_gb = m_info.get('current_usage_GB', 0.0)
+        m_limit_gb = m_info.get('usage_limit_GB', 0.0)
+        m_usage_str = escape_markdown(f"{m_usage_gb:.2f}")
+        m_limit_str = escape_markdown(f"{m_limit_gb:.2f}")
+        
+        # ساخت رشته نهایی با فرمت درخواستی شما
+        line = f"`•` *{name}* `|` `{h_usage_str}/{h_limit_str} GB`  🇩🇪  `|`  `{m_usage_str}/{m_limit_str} GB`  🇫🇷  "
+        user_lines.append(line)
+
+    return "\n".join(user_lines)
+
+def fmt_payments_report_list(payments: list, page: int) -> str:
+    """گزارش آخرین پرداخت کاربران را با تاریخ شمسی فرمت می‌کند."""
+    title = "گزارش آخرین پرداخت کاربران"
+    
+    if not payments:
+        return f"*{escape_markdown(title)}*\n\nهیچ پرداخت ثبت‌شده‌ای یافت نشد\\."
+
+    header_text = f"*{escape_markdown(title)}*"
+    if len(payments) > PAGE_SIZE:
+        total_pages = (len(payments) + PAGE_SIZE - 1) // PAGE_SIZE
+        pagination_text = f"(صفحه {page + 1} از {total_pages} | کل: {len(payments)})"
+        header_text += f"\n{escape_markdown(pagination_text)}"
+
+    lines = [header_text]
+    paginated_payments = payments[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+    for payment in paginated_payments:
+        name = escape_markdown(payment.get('name', 'کاربر ناشناس'))
+        # تبدیل تاریخ میلادی به شمسی با تابع کمکی
+        shamsi_date = format_shamsi_tehran(payment.get('payment_date')).split(' ')[0]
+        
+        line = f"`•` *{name}* `|` 💳 آخرین پرداخت: `{shamsi_date}`"
+        lines.append(line)
+
+    return "\n".join(lines)
+
+def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
+    """تاریخچه پرداخت‌های یک کاربر را با تاریخ شمسی فرمت می‌کند."""
+    title = f"سابقه پرداخت‌های کاربر: {user_name}"
+    
+    if not payments:
+        return f"*{escape_markdown(title)}*\n\nهیچ پرداخت ثبت‌شده‌ای برای این کاربر یافت نشد\\."
+
+    header_text = f"*{escape_markdown(title)}*"
+    if len(payments) > PAGE_SIZE:
+        total_pages = (len(payments) + PAGE_SIZE - 1) // PAGE_SIZE
+        pagination_text = f"(صفحه {page + 1} از {total_pages} | کل: {len(payments)})"
+        header_text += f"\n{escape_markdown(pagination_text)}"
+
+    lines = [header_text]
+    paginated_payments = payments[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+    for payment in paginated_payments:
+        shamsi_datetime = format_shamsi_tehran(payment.get('payment_date'))
+        line = f"`•` 💳 تاریخ ثبت: `{shamsi_datetime}`"
+        lines.append(line)
+
+    return "\n".join(lines)

@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from database import db
 from menu import menu
 import combined_handler
-from admin_formatters import fmt_admin_user_summary
+from admin_formatters import fmt_admin_user_summary,fmt_user_payment_history
 from utils import _safe_edit, escape_markdown
 
 logger = logging.getLogger(__name__)
@@ -272,3 +272,49 @@ def _handle_global_search_response(message: types.Message):
     except Exception as e:
         logger.error(f"Global search failed for query '{query}': {e}", exc_info=True)
         _safe_edit(uid, original_msg_id, "❌ خطایی در هنگام جستجو رخ داد. ممکن است پنل‌ها در دسترس نباشند.", reply_markup=menu.admin_management_menu())
+
+def handle_log_payment(call, params):
+    panel, identifier = params[0], params[1]
+    uid, msg_id = call.from_user.id, call.message.message_id
+    
+    info = combined_handler.get_combined_user_info(identifier)
+    if not info or not info.get('uuid'):
+        bot.answer_callback_query(call.id, "❌ کاربر یافت نشد یا UUID ندارد\\.", show_alert=True)
+        return
+
+    uuid_id = db.get_uuid_id_by_uuid(info['uuid'])
+    if not uuid_id:
+        bot.answer_callback_query(call.id, "❌ کاربر در دیتابیس ربات یافت نشد\\.", show_alert=True)
+        return
+
+    if db.add_payment_record(uuid_id):
+        text_to_show = fmt_admin_user_summary(info) + "\n\n*✅ پرداخت با موفقیت ثبت شد\\.*"
+        kb = menu.admin_user_interactive_management(identifier, info['is_active'], panel, back_callback=call.data.split(':')[-1])
+        _safe_edit(uid, msg_id, text_to_show, reply_markup=kb)
+    else:
+        bot.answer_callback_query(call.id, "❌ خطا در ثبت پرداخت\\.", show_alert=True)
+
+def handle_payment_history(call, params):
+    """تاریخچه پرداخت‌های یک کاربر را نمایش می‌دهد."""
+    panel, identifier, page = params[0], params[1], int(params[2])
+    uid, msg_id = call.from_user.id, call.message.message_id
+    
+    info = combined_handler.get_combined_user_info(identifier)
+    if not info or not info.get('uuid'):
+        bot.answer_callback_query(call.id, "❌ کاربر یافت نشد یا UUID ندارد.", show_alert=True)
+        return
+
+    uuid_id = db.get_uuid_id_by_uuid(info['uuid'])
+    if not uuid_id:
+        _safe_edit(uid, msg_id, "❌ کاربر در دیتابیس ربات یافت نشد.")
+        return
+
+    payment_history = db.get_user_payment_history(uuid_id)
+    
+    user_name_raw = info.get('name', 'کاربر ناشناس')
+    text = fmt_user_payment_history(payment_history, user_name_raw, page)
+
+    base_cb = f"admin:payment_history:{panel}:{identifier}"
+    back_cb = f"admin:us:{panel}:{identifier}" # بازگشت به منوی اطلاعات کاربر
+    kb = menu.create_pagination_menu(base_cb, page, len(payment_history), back_cb)
+    _safe_edit(uid, msg_id, text, reply_markup=kb)

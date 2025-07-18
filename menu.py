@@ -1,13 +1,7 @@
-# menu.py - نسخه کامل و نهایی با ساختار جدید
-
 from telebot import types
 from config import EMOJIS, PAGE_SIZE
 
 class Menu:
-    # ===============================================
-    # متدهای مربوط به کاربر (بدون تغییر در callback)
-    # ===============================================
-
     def main(self, is_admin: bool, has_birthday: bool = False) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
@@ -26,7 +20,6 @@ class Menu:
             kb.add(btn_settings, btn_services)
 
         if is_admin:
-            # این بخش صحیح است و از فرمت جدید استفاده می‌کند
             kb.add(types.InlineKeyboardButton(f"{EMOJIS['crown']} پنل مدیریت", callback_data="admin:panel"))
         return kb
 
@@ -49,7 +42,6 @@ class Menu:
         return markup
 
     def server_selection_menu(self, uuid_id: int) -> types.InlineKeyboardMarkup:
-        """منوی انتخاب سرور (آلمان/فرانسه) برای نمایش مصرف بازه‌ای."""
         kb = types.InlineKeyboardMarkup(row_width=2)
         btn_h = types.InlineKeyboardButton("آلمان 🇩🇪", callback_data=f"win_hiddify_{uuid_id}")
         btn_m = types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data=f"win_marzban_{uuid_id}")
@@ -71,7 +63,6 @@ class Menu:
         return kb
 
     def settings(self, settings_dict: dict) -> types.InlineKeyboardMarkup:
-        """منوی تنظیمات اعلان‌ها برای کاربر."""
         kb = types.InlineKeyboardMarkup(row_width=2)
         daily_text = f"📊 گزارش روزانه: {'✅' if settings_dict.get('daily_reports', True) else '❌'}"
         expiry_text = f"⏰ هشدار انقضا: {'✅' if settings_dict.get('expiry_warnings', True) else '❌'}"
@@ -88,10 +79,6 @@ class Menu:
         kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
         return kb
 
-    # ===============================================
-    # متدهای ادمین با فرمت callback جدید
-    # ===============================================
-
     def admin_panel(self) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
@@ -106,23 +93,9 @@ class Menu:
             types.InlineKeyboardButton("🎂 تولد کاربران", callback_data="admin:list:birthdays:0"),
             types.InlineKeyboardButton("🗄️ پشتیبان‌گیری", callback_data="admin:backup_menu")
         )
-        # دکمه جدید در این ردیف اضافه می‌شود
         kb.add(types.InlineKeyboardButton("🔄 رفرش مپینگ مرزبان", callback_data="admin:reload_maps"))
         kb.add(types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="back"))
-        return kb
 
-    # در فایل menu.py
-    def admin_management_menu(self) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(
-            types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
-            types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
-        )
-        # استفاده از کلید کوتاه‌تر "sg"
-        kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:sg"))
-
-        kb.add(types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"))
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin:panel"))
         return kb
 
     def admin_reports_menu(self, panel: str) -> types.InlineKeyboardMarkup:
@@ -167,6 +140,10 @@ class Menu:
             kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"))
             
             kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{panel}:{identifier}"))
+
+            kb.add(types.InlineKeyboardButton("💳 ثبت پرداخت", callback_data=f"admin:log_payment:{panel}:{identifier}"),
+                   types.InlineKeyboardButton("📜 سابقه پرداخت", callback_data=f"admin:payment_history:{panel}:{identifier}:0")
+            )
             
             kb.add(
                 types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
@@ -178,6 +155,25 @@ class Menu:
             final_back_callback = back_callback or f"admin:manage_panel:{panel}"
             kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=final_back_callback))
             
+            return kb
+
+    def admin_management_menu(self) -> types.InlineKeyboardMarkup:
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
+                types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
+            )
+            kb.add(
+                types.InlineKeyboardButton("📈 تحلیل کاربران ", callback_data="admin:report_by_plan_select"),
+                types.InlineKeyboardButton("⚙️ دستورات گروهی ", callback_data="admin:group_action_select_plan")
+            )
+
+            kb.add(types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:sg"))
+            
+            kb.add(types.InlineKeyboardButton("💳 گزارش پرداخت‌ها", callback_data="admin:list:payments:0"),
+                   types.InlineKeyboardButton("🤖 لیست کاربران ربات", callback_data="admin:list:bot_users:0"))
+            
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:panel"))
             return kb
 
     def admin_analytics_menu(self, panel: str) -> types.InlineKeyboardMarkup:
@@ -265,16 +261,55 @@ class Menu:
 
     def admin_reset_usage_selection_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
-        # استفاده از کلید کوتاه‌تر "rsa"
         btn_h = types.InlineKeyboardButton("آلمان 🇩🇪", callback_data=f"admin:rsa:hiddify:{identifier}")
         btn_m = types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data=f"admin:rsa:marzban:{identifier}")
         btn_both = types.InlineKeyboardButton("هر دو پنل", callback_data=f"admin:rsa:both:{identifier}")
-        # استفاده از کلید کوتاه‌تر "us" برای بازگشت به منوی اطلاعات کاربر
         btn_back = types.InlineKeyboardButton("🔙 لغو و بازگشت", callback_data=f"admin:us:{panel}:{identifier}")
         kb.add(btn_h, btn_m)
         kb.add(btn_both)
         kb.add(btn_back)
         return kb
+    
+    def plan_category_menu(self) -> types.InlineKeyboardMarkup:
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            btn_combined = types.InlineKeyboardButton("🚀 پلن‌های ترکیبی", callback_data="show_plans:combined")
+            btn_germany = types.InlineKeyboardButton("🇩🇪 پلن‌های آلمان", callback_data="show_plans:germany")
+            btn_back = types.InlineKeyboardButton("🔙 بازگشت", callback_data="back")
+            kb.add(btn_combined, btn_germany)
+            kb.add(btn_back)
+            return kb
 
-# ساخت یک نمونه از کلاس برای استفاده در کل پروژه
+    def admin_select_plan_for_report_menu(self) -> types.InlineKeyboardMarkup:
+        from utils import load_service_plans
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        
+        plans = load_service_plans()
+        for i, plan in enumerate(plans):
+            callback = f"admin:list_by_plan:{i}:0"
+            kb.add(types.InlineKeyboardButton(plan.get('name', f'Plan {i+1}'), callback_data=callback)) 
+        kb.add(types.InlineKeyboardButton("📝 کاربران بدون پلن", callback_data="admin:list_no_plan:0"))
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:management_menu"))
+        return kb
+
+    def admin_select_plan_for_action_menu(self) -> types.InlineKeyboardMarkup:
+            from utils import load_service_plans
+            kb = types.InlineKeyboardMarkup(row_width=1)
+            
+            plans = load_service_plans()
+            for i, plan in enumerate(plans):
+                callback = f"admin:ga_ask_value:add_gb:{i}"
+                kb.add(types.InlineKeyboardButton(plan.get('name', f'Plan {i+1}'), callback_data=callback))
+                
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:management_menu"))
+            return kb
+
+    def admin_select_action_type_menu(self, plan_index: int) -> types.InlineKeyboardMarkup:
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ga_ask_value:add_gb:{plan_index}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ga_ask_value:add_days:{plan_index}")
+        )
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت به انتخاب پلن", callback_data="admin:group_action_select_plan"))
+        return kb
+
 menu = Menu()

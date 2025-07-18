@@ -47,6 +47,7 @@ CUSTOM_SUB_LINK_BASE_URL = "https://drive.google.com/uc?export=download&id="
 # maxsize=2 یعنی حداکثر ۲ نتیجه متفاوت (معمولاً ۱ نتیجه get_all_users) را نگه می‌دارد
 api_cache = TTLCache(maxsize=2, ttl=60)
 
+DAILY_USAGE_ALERT_THRESHOLD_GB = 5
 WARNING_USAGE_THRESHOLD = 85 # آستانه هشدار مصرف به درصد
 NOTIFY_ADMIN_ON_USAGE = True # فعال/غیرفعال کردن این قابلیت
 

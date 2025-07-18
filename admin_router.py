@@ -1,9 +1,10 @@
 import logging
 from telebot import types, telebot
-from admin_handlers import user_management, reporting, broadcast, backup
-from admin_hiddify_handlers import _start_add_user_convo, initialize_hiddify_handlers
+from admin_handlers import user_management, reporting, broadcast, backup, group_actions 
+from admin_hiddify_handlers import _start_add_user_convo, _start_add_user_from_plan_convo, _handle_plan_selection, initialize_hiddify_handlers
 from admin_marzban_handlers import _start_add_marzban_user_convo, initialize_marzban_handlers
 from marzban_api_handler import marzban_handler
+from admin_handlers import group_actions 
 from menu import menu
 from utils import _safe_edit
 
@@ -17,6 +18,7 @@ def register_admin_handlers(b: telebot.TeleBot):
     
     initialize_hiddify_handlers(bot, admin_conversations)
     initialize_marzban_handlers(bot, admin_conversations)
+    group_actions.initialize_group_actions_handlers(bot, admin_conversations) # 2. این خط را برای فعال‌سازی اضافه کنید
     user_management.initialize_user_management_handlers(bot, admin_conversations)
     reporting.initialize_reporting_handlers(bot)
     broadcast.initialize_broadcast_handlers(bot, admin_conversations)
@@ -70,9 +72,13 @@ ADMIN_CALLBACK_HANDLERS = {
     
     # User Actions
     "add_user": lambda c, p: (_start_add_user_convo if p[0] == 'hiddify' else _start_add_marzban_user_convo)(c.from_user.id, c.message.message_id),
+    "add_user_plan": lambda c, p: _start_add_user_from_plan_convo(c, p),
+    "plan_select": lambda c, p: _handle_plan_selection(c, p), # **این خط اضافه/اصلاح شده**
     "sg": user_management.handle_global_search_convo,
     "us": user_management.handle_show_user_summary,
     "edt": user_management.handle_edit_user_menu,
+    "log_payment": user_management.handle_log_payment,
+    "payment_history": user_management.handle_payment_history, # **این خط اضافه شد**
     "ae": user_management.handle_ask_edit_value,
     "tgl": user_management.handle_toggle_status,
     "rb": user_management.handle_reset_birthday,
@@ -87,6 +93,13 @@ ADMIN_CALLBACK_HANDLERS = {
     "health_check": reporting.handle_health_check,
     "marzban_stats": reporting.handle_marzban_system_stats,
     "list": reporting.handle_paginated_list,
+    "report_by_plan_select": reporting.handle_report_by_plan_selection,
+    "list_by_plan": reporting.handle_list_users_by_plan,
+    "list_no_plan": reporting.handle_list_users_no_plan, # **این خط اضافه شد**
+
+    "group_action_select_plan": group_actions.handle_select_plan_for_action,
+    "ga_select_type": group_actions.handle_select_action_type, # **این خط اضافه شد**
+    "ga_ask_value": group_actions.handle_ask_action_value,
     
     # Other Admin Tools
     "broadcast": broadcast.start_broadcast_flow,
