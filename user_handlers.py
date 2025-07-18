@@ -2,13 +2,16 @@ import logging
 from telebot import types, telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
-from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS
+import jdatetime
+from config import ADMIN_IDS, CUSTOM_SUB_LINK_BASE_URL, EMOJIS, ADMIN_SUPPORT_CONTACT
 from database import db
 import combined_handler 
 from menu import menu
 from utils import validate_uuid, escape_markdown, load_custom_links, _safe_edit
-from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats
+from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats, fmt_user_payment_history
 from utils import load_service_plans
+import io # Add this to the top of the file
+import qrcode # Add this to the top of the file
 
 logger = logging.getLogger(__name__)
 bot = telebot.TeleBot("YOUR_BOT_TOKEN")
@@ -65,25 +68,37 @@ def _get_birthday_step(message: types.Message):
     uid = message.from_user.id
     birthday_str = message.text.strip()
     
-    # FINAL FIX: Switched to parsing Gregorian date format (YYYY-MM-DD).
     try:
-        gregorian_date = datetime.strptime(birthday_str, '%Y-%m-%d').date()
+        # --- MODIFIED: Parse Shamsi date and convert to Gregorian for storage ---
+        shamsi_date = jdatetime.datetime.strptime(birthday_str, '%Y/%m/%d')
+        gregorian_date = shamsi_date.togregorian().date()
+        
         db.update_user_birthday(uid, gregorian_date)
         bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد\\.",
                          reply_markup=menu.main(uid in ADMIN_IDS, has_birthday=True), parse_mode="MarkdownV2")
     except ValueError:
-        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل `YYYY-MM-DD` وارد کنید \\(مثلاً `1990-08-27`\\)\\.", parse_mode="MarkdownV2")
+        # --- MODIFIED: Updated prompt for Shamsi format ---
+        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل شمسی `YYYY/MM/DD` وارد کنید \\(مثلاً `1370/01/15`\\)\\.", parse_mode="MarkdownV2")
         bot.clear_step_handler_by_chat_id(uid)
         if m: bot.register_next_step_handler(m, _get_birthday_step)
 
-# --- Callback Handlers ---
 
 def _handle_add_uuid_request(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, "لطفاً UUID جدید را ارسال کنید:", reply_markup=menu.cancel_action("manage"), parse_mode=None)
     bot.register_next_step_handler_by_chat_id(call.from_user.id, _add_uuid_step)
 
 def _show_manage_menu(call: types.CallbackQuery):
-    _safe_edit(call.from_user.id, call.message.message_id, "🔐 *فهرست اکانت‌ها*", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
+    uid = call.from_user.id
+    user_uuids_from_db = db.uuids(uid)
+    
+    user_accounts_details = []
+    for row in user_uuids_from_db:
+        info = combined_handler.get_combined_user_info(row["uuid"])
+        if info:
+            info['id'] = row['id']
+            user_accounts_details.append(info)
+            
+    _safe_edit(uid, call.message.message_id, "🔐 *فهرست اکانت‌ها*", reply_markup=menu.accounts(user_accounts_details))
 
 def _show_quick_stats(call: types.CallbackQuery):
     text, menu_data = quick_stats(db.uuids(call.from_user.id), page=0)
@@ -100,7 +115,8 @@ def _go_back_to_main(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, "🏠 *منوی اصلی*", reply_markup=menu.main(call.from_user.id in ADMIN_IDS, has_birthday))
 
 def _handle_birthday_gift_request(call: types.CallbackQuery):
-    prompt = "لطفاً تاریخ تولد خود را به فرمت میلادی `YYYY-MM-DD` وارد کنید \\(مثلاً: `1990-08-27`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
+    # --- MODIFIED: Updated prompt for Shamsi format ---
+    prompt = "لطفاً تاریخ تولد خود را به فرمت **شمسی** `YYYY/MM/DD` وارد کنید \\(مثلاً: `1370/01/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
     _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
     bot.register_next_step_handler_by_chat_id(call.from_user.id, _get_birthday_step)
 
@@ -111,24 +127,29 @@ def _show_plans(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def _show_plan_categories(call: types.CallbackQuery):
-    """منوی انتخاب دسته‌بندی پلن‌ها را نمایش می‌دهد."""
     prompt = "لطفاً دسته‌بندی سرویس مورد نظر خود را انتخاب کنید:"
     _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.plan_category_menu())
 
-# تابع جدید برای نمایش پلن‌های فیلتر شده
 def _show_filtered_plans(call: types.CallbackQuery):
-    """پلن‌ها را بر اساس نوع فیلتر کرده و نمایش می‌دهد."""
     plan_type = call.data.split(":")[1] # مثلا 'combined' or 'germany'
     
     all_plans = load_service_plans()
-    # فیلتر کردن پلن‌ها بر اساس نوع
     filtered_plans = [p for p in all_plans if p.get("type") == plan_type]
     
     text = fmt_service_plans(filtered_plans, plan_type)
     
-    # دکمه بازگشت به منوی انتخاب دسته‌بندی
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data="view_plans"))
+    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
+
+def _handle_support_request(call: types.CallbackQuery):
+    text = (
+        f"🙋‍♂️ *راهنمای پشتیبانی*\n\n"
+        f"در صورت بروز هرگونه مشکل یا سوال در مورد سرویس خود، می‌توانید مستقیماً با ادمین در ارتباط باشید\\.\n\n"
+        f"لطفاً برای تماس، به شناسه‌ی زیر پیام دهید:\n"
+        f"👤 **{escape_markdown(ADMIN_SUPPORT_CONTACT)}**"
+    )
+    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 USER_CALLBACK_MAP = {
@@ -136,6 +157,7 @@ USER_CALLBACK_MAP = {
     "manage": _show_manage_menu,
     "quick_stats": _show_quick_stats,
     "settings": _show_settings,
+    "support": _handle_support_request, # --- ADD THIS LINE ---
     "back": _go_back_to_main,
     "birthday_gift": _handle_birthday_gift_request,
     "view_plans": _show_plan_categories,
@@ -165,34 +187,43 @@ def handle_user_callbacks(call: types.CallbackQuery):
         _safe_edit(uid, msg_id, "⚙️ *تنظیمات شما به‌روز شد*", reply_markup=menu.settings(db.get_user_settings(uid)))
 
     elif data.startswith("getlinks_"):
-        uuid_id = int(data.split("_")[1])
-        row = db.uuid_by_id(call.from_user.id, uuid_id)
-        if not row:
-            bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد.", show_alert=True)
-            return
+            uuid_id = int(data.split("_")[1])
+            row = db.uuid_by_id(call.from_user.id, uuid_id)
+            if not row:
+                bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد\\.", show_alert=True)
+                return
 
-        user_uuid = row['uuid']
-        custom_links = load_custom_links()
-        user_links_data = custom_links.get(user_uuid)
-        
-        if user_links_data and user_links_data.get('normal'):
-            link_id = user_links_data['normal']
-            if link_id.startswith('http'):
-                full_sub_link = link_id
+            user_uuid = row['uuid']
+            custom_links = load_custom_links()
+            user_links_data = custom_links.get(user_uuid)
+            
+            if user_links_data and user_links_data.get('normal'):
+                link_id = user_links_data['normal']
+                if link_id.startswith('http'):
+                    full_sub_link = link_id
+                else:
+                    full_sub_link = CUSTOM_SUB_LINK_BASE_URL.rstrip('/') + '/' + link_id.lstrip('/')
+                
+                qr_img = qrcode.make(full_sub_link)
+                stream = io.BytesIO()
+                qr_img.save(stream, 'PNG')
+                stream.seek(0)
+                
+                text = (
+                    f"🔗 *لینک اشتراک شما آماده است*\n\n"
+                    f"۱\\. برای کپی کردن، روی لینک زیر ضربه بزنید:\n"
+                    f"`{escape_markdown(full_sub_link)}`\n\n"
+                    f"۲\\. یا کد QR بالا را در اپلیکیشن خود اسکن کنید\\."
+                )
+                
+                kb = types.InlineKeyboardMarkup()
+                kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"acc_{uuid_id}"))
+
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+                bot.send_photo(call.from_user.id, photo=stream, caption=text, reply_markup=kb, parse_mode="MarkdownV2")
+
             else:
-                full_sub_link = CUSTOM_SUB_LINK_BASE_URL.rstrip('/') + '/' + link_id.lstrip('/')
-            
-            text = (
-                f"🔗 *لینک اشتراک شما آماده است*\n\n"
-                f"برای کپی کردن، روی لینک زیر ضربه بزنید:\n\n"
-                f"`{escape_markdown(full_sub_link)}`"
-            )
-            
-            kb = types.InlineKeyboardMarkup()
-            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"acc_{uuid_id}"))
-            _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb, parse_mode="MarkdownV2")
-        else:
-            bot.answer_callback_query(call.id, "❌ لینک سفارشی برای این اکانت در فایل json تعریف نشده است\\.", show_alert=True)
+                bot.answer_callback_query(call.id, "❌ لینک سفارشی برای این اکانت در فایل json تعریف نشده است\\.", show_alert=True)
             
     elif data.startswith("del_"):
         uuid_id = int(data.split("_")[1])
@@ -227,6 +258,24 @@ def handle_user_callbacks(call: types.CallbackQuery):
         text, menu_data = quick_stats(db.uuids(uid), page=page)
         reply_markup = menu.quick_stats_menu(menu_data['num_accounts'], menu_data['current_page'])
         _safe_edit(uid, msg_id, text, reply_markup=reply_markup)
+
+    elif data.startswith("payment_history_"):
+        parts = data.split('_')
+        uuid_id, page = int(parts[2]), int(parts[3])
+        
+        row = db.uuid_by_id(uid, uuid_id)
+        if not row:
+            bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد.", show_alert=True)
+            return
+
+        payment_history = db.get_user_payment_history(uuid_id)
+        
+        text = fmt_user_payment_history(payment_history, row.get('name', 'کاربر ناشناس'), page)
+
+        base_cb = f"payment_history_{uuid_id}"
+        back_cb = f"acc_{uuid_id}"
+        kb = menu.create_pagination_menu(base_cb, page, len(payment_history), back_cb)
+        _safe_edit(uid, msg_id, text, reply_markup=kb)
 
     if data.startswith("show_plans:"):
         _show_filtered_plans(call)

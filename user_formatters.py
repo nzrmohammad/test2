@@ -231,3 +231,24 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
     lines.append("\n*نکته:* این آمار تجمعی است\\. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد\\.")
         
     return "\n".join(lines)
+
+def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
+    title = f"💳 *سابقه پرداخت‌های اکانت {escape_markdown(user_name)}*"
+    
+    if not payments:
+        return f"{title}\n\nهیچ سابقه پرداختی برای این اکانت ثبت نشده است\\."
+
+    header_text = title
+    if len(payments) > PAGE_SIZE:
+        total_pages = (len(payments) + PAGE_SIZE - 1) // PAGE_SIZE
+        pagination_text = f"(صفحه {page + 1} از {total_pages})"
+        header_text += f"\n{escape_markdown(pagination_text)}"
+
+    lines = [header_text]
+    paginated_payments = payments[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
+    for payment in paginated_payments:
+        shamsi_datetime = format_shamsi_tehran(payment.get('payment_date'))
+        lines.append(f"`•` تاریخ تمدید: `{shamsi_datetime}`")
+
+    return "\n".join(lines)

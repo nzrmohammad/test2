@@ -3,9 +3,9 @@ import logging
 import json
 from datetime import datetime, timedelta
 import pytz
-from config import MARZBAN_API_BASE_URL, MARZBAN_API_USERNAME, MARZBAN_API_PASSWORD, API_TIMEOUT
+from config import MARZBAN_API_BASE_URL, MARZBAN_API_USERNAME, MARZBAN_API_PASSWORD, API_TIMEOUT, api_cache
 from database import db
-from utils import validate_uuid
+from cachetools import cached
 
 logger = logging.getLogger(__name__)
 
@@ -161,13 +161,13 @@ class MarzbanAPIHandler:
             if not self._get_access_token():
                 return None
         
-        # FINAL FIX: Normalize the UUID to lowercase before lookup for 100% reliable matching.
         marzban_username = self.uuid_to_username_map.get(uuid.lower())
         if not marzban_username:
             return None
 
         return self.get_user_by_username(marzban_username)
 
+    @cached(api_cache)
     def get_all_users(self) -> list[dict]:
             all_users_raw = self._request("GET", "/users")
             if not all_users_raw or 'users' not in all_users_raw:

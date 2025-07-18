@@ -88,6 +88,7 @@ ADMIN_CALLBACK_HANDLERS = {
     "rsa": user_management.handle_reset_usage_action,
     "del_cfm": user_management.handle_delete_user_confirm,
     "del_a": user_management.handle_delete_user_action,
+    "note": user_management.handle_ask_for_note, # --- ADD THIS LINE ---
     
     # --- Reporting & Analytics (FIXED SECTION) ---
     "reports_menu": reporting.handle_reports_menu, # <--- این خط اصلاح/اضافه شد
@@ -104,6 +105,10 @@ ADMIN_CALLBACK_HANDLERS = {
     "group_action_select_plan": group_actions.handle_select_plan_for_action,
     "ga_select_type": group_actions.handle_select_action_type,
     "ga_ask_value": group_actions.handle_ask_action_value,
+    "adv_ga_select_filter": group_actions.handle_select_advanced_filter,
+    "adv_ga_select_action": group_actions.handle_select_action_for_filter,
+    "search_by_tid": user_management.handle_search_by_telegram_id_convo, # --- ADD THIS LINE ---
+
     
     # Other Admin Tools
     "broadcast": broadcast.start_broadcast_flow,

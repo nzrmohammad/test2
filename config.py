@@ -34,6 +34,8 @@ TEHRAN_TZ = pytz.timezone("Asia/Tehran")
 DAILY_REPORT_TIME = time(23, 59)
 CLEANUP_TIME = time(23, 59)
 
+ADMIN_SUPPORT_CONTACT = os.getenv("ADMIN_SUPPORT_CONTACT", "@Nzrmohammad")
+
 PAGE_SIZE = 35
 
 BIRTHDAY_GIFT_GB = 15  # حجم هدیه (گیگابایت)

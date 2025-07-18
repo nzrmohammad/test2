@@ -1,10 +1,11 @@
 import pytz
 from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 from config import EMOJIS, PAGE_SIZE
 from database import db
 from utils import (
     format_daily_usage, escape_markdown,
-    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar, format_shamsi_tehran
+    format_relative_time, validate_uuid , format_raw_datetime, create_progress_bar, format_shamsi_tehran, gregorian_to_shamsi_str
 )
 
 
@@ -247,9 +248,10 @@ def fmt_birthdays_list(users: list, page: int) -> str:
 
     for user in paginated_users:
         name = escape_markdown(user.get('first_name', 'کاربر ناشناس'))
-        gregorian_date = user['birthday']
-        gregorian_str = escape_markdown(gregorian_date.strftime('%Y-%m-%d'))
-        lines.append(f"`•` *{name}* `\\|` gregorian: `{gregorian_str}`")
+        # --- MODIFIED: Use the new helper to display Shamsi date ---
+        birthday_obj = user.get('birthday')
+        shamsi_str = gregorian_to_shamsi_str(birthday_obj)
+        lines.append(f"`•` *{name}* `\\|` 🎂 تاریخ تولد: `{shamsi_str}`")
         
     return "\n".join(lines)
 
@@ -327,7 +329,7 @@ def fmt_panel_users_list(users: list, panel_name: str, page: int) -> str:
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
 
-def fmt_admin_user_summary(info: dict) -> str:
+def fmt_admin_user_summary(info: dict, db_user: Optional[dict] = None) -> str:
     if not info:
         return "❌ خطا در دریافت اطلاعات کاربر\\."
 
@@ -399,6 +401,11 @@ def fmt_admin_user_summary(info: dict) -> str:
         report_parts.append(f"🔑 شناسه یکتا: `{escape_markdown(info.get('uuid'))}`")
     elif m_info:
         report_parts.append(f"👤 یوزرنیم: `{escape_markdown(info.get('name'))}`")
+        
+    # --- Display Admin Note if exists ---
+    admin_note = db_user.get('admin_note') if db_user else None
+    if admin_note:
+        report_parts.append(f"📝 *یادداشت ادمین:* `{escape_markdown(admin_note)}`")
 
     # FIX: The progress bar function now handles its own formatting.
     # This robustly prevents the 'parse entities' error.

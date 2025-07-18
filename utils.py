@@ -110,3 +110,20 @@ def parse_volume_string(volume_str: str) -> int:
     if numbers:
         return int(numbers[0])
     return 0
+
+def gregorian_to_shamsi_str(gregorian_date: Optional[datetime.date]) -> str:
+    """Converts a gregorian date object to a Shamsi date string (YYYY/MM/DD)."""
+    if not isinstance(gregorian_date, (datetime, jdatetime.date)):
+         # If it's a date object, convert to datetime first
+        if isinstance(gregorian_date, jdatetime.date):
+            gregorian_date = gregorian_date.togregorian()
+        try:
+            gregorian_date = datetime.combine(gregorian_date, datetime.min.time())
+        except (TypeError, AttributeError):
+            return "نامشخص"
+
+    if not gregorian_date:
+        return "نامشخص"
+        
+    j_date = jdatetime.datetime.fromgregorian(datetime=gregorian_date)
+    return j_date.strftime('%Y/%m/%d')

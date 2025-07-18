@@ -11,7 +11,6 @@ from utils import safe_float
 logger = logging.getLogger(__name__)
 
 class HiddifyAPIHandler:
-    # ... (init, _create_session, _request, _parse_api_datetime, _calculate_remaining_days remain the same)
     def __init__(self):
         self.base_url = f"{HIDDIFY_DOMAIN.rstrip('/')}/{ADMIN_PROXY_PATH.strip('/')}/api/v2/admin"
         self.api_key = ADMIN_UUID

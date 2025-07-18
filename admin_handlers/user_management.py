@@ -1,8 +1,6 @@
 import logging
 from telebot import types
-from datetime import datetime
 from typing import Optional, Dict, Any
-
 from database import db
 from menu import menu
 import combined_handler
@@ -33,7 +31,14 @@ def handle_show_user_summary(call, params):
     
     info = combined_handler.get_combined_user_info(identifier)
     if info:
-        text = fmt_admin_user_summary(info)
+        # --- Fetch DB user info to pass to formatter ---
+        db_user = None
+        if info.get('uuid'):
+            user_telegram_id = db.get_user_id_by_uuid(info['uuid'])
+            if user_telegram_id:
+                db_user = db.user(user_telegram_id)
+        
+        text = fmt_admin_user_summary(info, db_user) # Pass both API info and DB info
         kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel, back_callback=back_callback)
         _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
     else:
@@ -68,17 +73,36 @@ def apply_user_edit(msg: types.Message):
         add_gb = value if edit_type == "add_gb" else 0
         add_days = int(value) if edit_type == "add_days" else 0
 
-        # تغییر این قسمت برای ویرایش کاربر در هر دو پنل
+        # Determine target panel dynamically
+        info = combined_handler.get_combined_user_info(identifier)
+        if not info:
+             raise Exception("User not found before edit attempt")
+        target_panel = 'both'
+        if not info.get('breakdown', {}).get('hiddify'):
+            target_panel = 'marzban'
+        if not info.get('breakdown', {}).get('marzban'):
+            target_panel = 'hiddify'
+
         success = combined_handler.modify_user_on_all_panels(
             identifier=identifier,
             add_gb=add_gb,
             add_days=add_days,
-            target_panel='both' # <<<< اینجا به 'both' تغییر کرد تا همیشه هر دو پنل آپدیت شوند
+            target_panel=target_panel
         )
         
         if success:
             new_info = combined_handler.get_combined_user_info(identifier)
-            # رفع باگ Markdown: اضافه کردن \\ به انتهای جمله
+            
+            user_telegram_id = db.get_user_id_by_uuid(new_info.get('uuid', ''))
+            notification_text = ""
+            if add_gb > 0:
+                notification_text = f"✅ *{escape_markdown(str(add_gb))} GB* حجم به اکانت شما اضافه شد\\."
+            elif add_days > 0:
+                notification_text = f"✅ *{escape_markdown(str(add_days))}* روز به اعتبار اکانت شما اضافه شد\\."
+            
+            if user_telegram_id and notification_text:
+                _notify_user(user_telegram_id, notification_text)
+
             text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ کاربر با موفقیت ویرایش شد\\.*"
             original_panel_for_menu = 'hiddify' if 'hiddify' in new_info.get('breakdown', {}) else 'marzban'
             kb = menu.admin_user_interactive_management(identifier, new_info['is_active'], original_panel_for_menu)
@@ -167,8 +191,19 @@ def handle_reset_usage_action(call, params):
             
         new_info = combined_handler.get_combined_user_info(identifier)
         if new_info:
+            # --- START: User Notification Block ---
+            user_telegram_id = db.get_user_id_by_uuid(new_info.get('uuid', ''))
+            panel_name_map = {
+                'hiddify': 'آلمان 🇩🇪',
+                'marzban': 'فرانسه 🇫🇷',
+                'both': 'هر دو پنل'
+            }
+            panel_name = panel_name_map.get(panel_to_reset, 'اکانت شما')
+            notification_text = f"🔄 مصرف دیتای اکانت شما برای *{escape_markdown(panel_name)}* با موفقیت صفر شد\\."
+            _notify_user(user_telegram_id, notification_text)
+            # --- END: User Notification Block ---
+
             text_to_show = fmt_admin_user_summary(new_info) + "\n\n*✅ مصرف کاربر با موفقیت صفر شد\\.*"
-            
             original_panel = 'hiddify' if 'hiddify' in new_info.get('breakdown', {}) else 'marzban'
             kb = menu.admin_user_interactive_management(identifier, new_info['is_active'], original_panel)
             _safe_edit(call.from_user.id, call.message.message_id, text_to_show, reply_markup=kb)
@@ -207,7 +242,6 @@ def handle_delete_user_action(call, params):
 
 
 def handle_global_search_convo(call, params):
-    """مکالمه برای جستجوی جامع کاربر را شروع می‌کند."""
     uid, msg_id = call.from_user.id, call.message.message_id
     prompt = "لطفاً نام یا UUID کاربر مورد نظر برای جستجو در هر دو پنل را وارد کنید:"
     admin_conversations[uid] = {'msg_id': msg_id}
@@ -230,19 +264,36 @@ def _handle_global_search_response(message: types.Message):
             return
 
         if len(results) == 1:
-            # ... (این بخش بدون تغییر است)
             user = results[0]
-            panel = user.get('panel', 'hiddify')
             identifier = user.get('uuid') or user.get('name')
             info = combined_handler.get_combined_user_info(identifier)
             if info:
-                text = fmt_admin_user_summary(info)
+                db_user = None
+                if info.get('uuid'):
+                    user_telegram_id = db.get_user_id_by_uuid(info['uuid'])
+                    if user_telegram_id:
+                        db_user = db.user(user_telegram_id)
+                
+                panel = user.get('panel', 'hiddify')
+                panel_short = 'h' if panel == 'hiddify' else 'm'
+                text = fmt_admin_user_summary(info, db_user)
                 kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel, back_callback="admin:management_menu")
                 _safe_edit(uid, original_msg_id, text, reply_markup=kb)
         else:
             kb = types.InlineKeyboardMarkup()
             for user in results:
-                panel_emoji = "🇩🇪" if user.get('panel') == 'hiddify' else "🇫🇷"
+                breakdown = user.get('breakdown', {})
+                on_hiddify = 'hiddify' in breakdown and breakdown['hiddify']
+                on_marzban = 'marzban' in breakdown and breakdown['marzban']
+                
+                panel_flags = ""
+                if on_hiddify and on_marzban:
+                    panel_flags = "🇩🇪🇫🇷"
+                elif on_hiddify:
+                    panel_flags = "🇩🇪"
+                elif on_marzban:
+                    panel_flags = "🇫🇷"
+
                 identifier = user.get('uuid') or user.get('name')
                 limit = user.get('usage_limit_GB', 0)
                 usage = user.get('current_usage_GB', 0)
@@ -250,11 +301,9 @@ def _handle_global_search_response(message: types.Message):
 
                 usage_str = f"{usage:.1f}".replace('.', ',')
                 limit_str = f"{limit:.1f}".replace('.', ',')
-                button_text = f"{status_emoji} {panel_emoji} {user['name']} ({usage_str}/{limit_str} GB)"
+                button_text = f"{status_emoji} {panel_flags} {user['name']} ({usage_str}/{limit_str} GB)"
                 
                 panel = user.get('panel', 'hiddify')
-                
-                # **تغییر اصلی: کوتاه کردن پارامترها برای جلوگیری از خطای تلگرام**
                 panel_short = 'h' if panel == 'hiddify' else 'm'
                 callback_data = f"admin:us:{panel_short}:{identifier}:mgt"
                 
@@ -288,6 +337,16 @@ def handle_log_payment(call, params):
         return
 
     if db.add_payment_record(uuid_id):
+        # --- START: User Notification Block ---
+        user_telegram_id = db.get_user_id_by_uuid(info['uuid'])
+        user_name = escape_markdown(info.get('name', ''))
+        notification_text = (
+            f"با تشکر از شما 🙏\n\n"
+            f"✅ پرداخت شما برای اکانت *{user_name}* با موفقیت ثبت و سرویس شما تمدید شد\\."
+        )
+        _notify_user(user_telegram_id, notification_text)
+        # --- END: User Notification Block ---
+
         text_to_show = fmt_admin_user_summary(info) + "\n\n*✅ پرداخت با موفقیت ثبت شد\\.*"
         kb = menu.admin_user_interactive_management(identifier, info['is_active'], panel, back_callback=call.data.split(':')[-1])
         _safe_edit(uid, msg_id, text_to_show, reply_markup=kb)
@@ -318,3 +377,141 @@ def handle_payment_history(call, params):
     back_cb = f"admin:us:{panel}:{identifier}" # بازگشت به منوی اطلاعات کاربر
     kb = menu.create_pagination_menu(base_cb, page, len(payment_history), back_cb)
     _safe_edit(uid, msg_id, text, reply_markup=kb)
+
+def handle_ask_for_note(call, params):
+    """Starts the conversation to add/edit an admin note for a user."""
+    panel, identifier = params[0], params[1]
+    uid, msg_id = call.from_user.id, call.message.message_id
+    
+    info = combined_handler.get_combined_user_info(identifier)
+    if not info or not info.get('uuid'):
+        bot.answer_callback_query(call.id, "❌ کاربر یافت نشد یا UUID ندارد.", show_alert=True)
+        return
+    
+    user_telegram_id = db.get_user_id_by_uuid(info['uuid'])
+    if not user_telegram_id:
+        bot.answer_callback_query(call.id, "❌ کاربر در دیتابیس ربات یافت نشد.", show_alert=True)
+        return
+    
+    db_user = db.user(user_telegram_id)
+    current_note = db_user.get('admin_note') if db_user else None
+
+    prompt = "لطفاً یادداشت جدید را برای این کاربر وارد کنید.\n\n"
+    if current_note:
+        prompt += f"*یادداشت فعلی:*\n`{escape_markdown(current_note)}`\n\n"
+    prompt += "برای حذف یادداشت فعلی، کلمه `حذف` را ارسال کنید."
+    
+    admin_conversations[uid] = {
+        'action_type': 'add_note',
+        'identifier': identifier,
+        'panel': panel,
+        'user_telegram_id': user_telegram_id,
+        'msg_id': msg_id
+    }
+    back_cb = f"admin:us:{'h' if panel == 'hiddify' else 'm'}:{identifier}"
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action(back_cb))
+    bot.register_next_step_handler_by_chat_id(uid, _save_user_note)
+
+
+# --- NEW FUNCTION 2 ---
+def _save_user_note(message: types.Message):
+    """Saves the provided note to the user's profile in the database."""
+    uid, text = message.from_user.id, message.text.strip()
+    if uid not in admin_conversations: return
+    
+    convo = admin_conversations.pop(uid, {})
+    if convo.get('action_type') != 'add_note': return
+
+    msg_id = convo['msg_id']
+    user_telegram_id = convo['user_telegram_id']
+    identifier = convo['identifier']
+    panel = convo['panel']
+    
+    note_to_save = text
+    if text.lower() in ['حذف', 'delete', 'remove', 'del']:
+        note_to_save = None # Set to NULL to delete
+
+    db.update_user_note(user_telegram_id, note_to_save)
+    
+    bot.send_message(uid, "✅ یادداشت با موفقیت ذخیره شد.")
+    
+    # Refresh user summary view
+    info = combined_handler.get_combined_user_info(identifier)
+    if info:
+        db_user = db.user(user_telegram_id) # Re-fetch user to get the latest note
+        text = fmt_admin_user_summary(info, db_user) # Pass db_user to formatter
+        kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel)
+        _safe_edit(uid, msg_id, text, reply_markup=kb)
+
+def _notify_user(user_id: Optional[int], message: str):
+    """Safely sends a notification message to a user."""
+    if not user_id:
+        return
+    try:
+        bot.send_message(user_id, message, parse_mode="MarkdownV2")
+        logger.info(f"Sent notification to user {user_id}")
+    except Exception as e:
+        # Fails silently if user has blocked the bot or other issues.
+        logger.warning(f"Failed to send notification to user {user_id}: {e}")
+
+# --- NEW FUNCTION 1 ---
+def handle_search_by_telegram_id_convo(call, params):
+    """Starts the conversation to search for a user by their Telegram ID."""
+    uid, msg_id = call.from_user.id, call.message.message_id
+    prompt = "لطفاً شناسه عددی (ID) کاربر تلگرام مورد نظر را وارد کنید:"
+    
+    admin_conversations[uid] = {'action_type': 'search_by_tid', 'msg_id': msg_id}
+    
+    _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:management_menu"))
+    bot.register_next_step_handler_by_chat_id(uid, _find_user_by_telegram_id)
+
+
+def _find_user_by_telegram_id(message: types.Message):
+    admin_id, text = message.from_user.id, message.text.strip()
+    if admin_id not in admin_conversations: return
+    
+    convo = admin_conversations.pop(admin_id, {})
+    msg_id = convo['msg_id']
+
+    try:
+        target_user_id = int(text)
+    except ValueError:
+        _safe_edit(admin_id, msg_id, "❌ شناسه وارد شده نامعتبر است. لطفاً یک عدد وارد کنید\\.", reply_markup=menu.admin_management_menu())
+        return
+
+    _safe_edit(admin_id, msg_id, "⏳ در حال جستجو\\.\\.\\.")
+    
+    user_uuids = db.uuids(target_user_id) 
+    if not user_uuids:
+        _safe_edit(admin_id, msg_id, f"❌ هیچ اکانتی برای کاربر با شناسه `{target_user_id}` یافت نشد\\.", reply_markup=menu.admin_management_menu())
+        return
+
+    if len(user_uuids) == 1:
+        uuid_str = user_uuids[0]['uuid']
+        info = combined_handler.get_combined_user_info(uuid_str)
+        if info:
+            db_user = db.user(target_user_id)
+            panel = 'hiddify' if 'hiddify' in info.get('breakdown', {}) else 'marzban'
+            panel_short = 'h' if panel == 'hiddify' else 'm'
+            text = fmt_admin_user_summary(info, db_user)
+            kb = menu.admin_user_interactive_management(uuid_str, info.get('is_active', False), panel, back_callback="admin:management_menu")
+            _safe_edit(admin_id, msg_id, text, reply_markup=kb)
+        else:
+            _safe_edit(admin_id, msg_id, "❌ خطا در دریافت اطلاعات از پنل\\.", reply_markup=menu.admin_management_menu())
+        return
+
+    kb = types.InlineKeyboardMarkup()
+    db_user = db.user(target_user_id)
+    first_name = escape_markdown(db_user.get('first_name', f"کاربر {target_user_id}"))
+    
+    for row in user_uuids:
+        button_text = f"👤 {row.get('name', 'اکانت ناشناس')}"
+        info = combined_handler.get_combined_user_info(row['uuid'])
+        if info:
+            panel = 'hiddify' if 'hiddify' in info.get('breakdown', {}) else 'marzban'
+            panel_short = 'h' if panel == 'hiddify' else 'm'
+            kb.add(types.InlineKeyboardButton(button_text, callback_data=f"admin:us:{panel_short}:{row['uuid']}:mgt"))
+
+    kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت", callback_data="admin:management_menu"))
+    prompt = f"چندین اکانت برای کاربر *{escape_markdown(first_name)}* یافت شد\\. لطفاً یکی را انتخاب کنید:"
+    _safe_edit(admin_id, msg_id, prompt, reply_markup=kb)

@@ -8,46 +8,59 @@ class Menu:
     # User Panel Menus
     # =============================================================================
     def main(self, is_admin: bool, has_birthday: bool = False) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(
-            types.InlineKeyboardButton(f"{EMOJIS['key']} مدیریت اکانت", callback_data="manage"),
-            types.InlineKeyboardButton(f"{EMOJIS['lightning']} آمار فوری", callback_data="quick_stats")
-        )
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                types.InlineKeyboardButton(f"{EMOJIS['key']} مدیریت اکانت", callback_data="manage"),
+                types.InlineKeyboardButton(f"{EMOJIS['lightning']} آمار فوری", callback_data="quick_stats")
+            )
 
-        btn_services = types.InlineKeyboardButton(f"{EMOJIS['money']} مشاهده سرویس ها", callback_data="view_plans")
-        btn_settings = types.InlineKeyboardButton(f"{EMOJIS['bell']} تنظیمات", callback_data="settings")
-        btn_birthday = types.InlineKeyboardButton("🎁 هدیه تولد", callback_data="birthday_gift")
+            btn_services = types.InlineKeyboardButton(f"{EMOJIS['money']} مشاهده سرویس ها", callback_data="view_plans")
+            btn_settings = types.InlineKeyboardButton(f"{EMOJIS['bell']} تنظیمات", callback_data="settings")
+            btn_birthday = types.InlineKeyboardButton("🎁 هدیه تولد", callback_data="birthday_gift")
+            
+            btn_support = types.InlineKeyboardButton("💬 پشتیبانی", callback_data="support")
 
-        if not has_birthday:
-            kb.add(btn_settings, btn_services)
-            kb.add(btn_birthday)
-        else:
-            kb.add(btn_settings, btn_services)
+            if not has_birthday:
+                kb.add(btn_settings, btn_services)
+                kb.add(btn_birthday, btn_support)
+            else:
+                kb.add(btn_settings, btn_services)
+                kb.add(btn_support)
 
-        if is_admin:
-            kb.add(types.InlineKeyboardButton(f"{EMOJIS['crown']} پنل مدیریت", callback_data="admin:panel"))
-        return kb
+            if is_admin:
+                kb.add(types.InlineKeyboardButton(f"{EMOJIS['crown']} پنل مدیریت", callback_data="admin:panel"))
+            return kb
 
     def accounts(self, rows) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=1)
-        for r in rows:
-            name = r.get('name', 'کاربر ناشناس')
-            kb.add(types.InlineKeyboardButton(f"📊 {name}", callback_data=f"acc_{r['id']}"))
-        kb.add(types.InlineKeyboardButton("➕ افزودن اکانت جدید", callback_data="add"))
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
-        return kb
+            kb = types.InlineKeyboardMarkup(row_width=1)
+            for r in rows:
+                name = r.get('name', 'کاربر ناشناس')
+                usage_percentage = r.get('usage_percentage', 0)
+                expire_days = r.get('expire')
+
+                summary = f"{usage_percentage:.0f}% Used"
+                if expire_days is not None:
+                    summary += f" / {expire_days} Days"
+
+                button_text = f"📊 {name} ({summary})"
+                kb.add(types.InlineKeyboardButton(button_text, callback_data=f"acc_{r['id']}"))
+
+            kb.add(types.InlineKeyboardButton("➕ افزودن اکانت جدید", callback_data="add"))
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
+            return kb
     
     def account_menu(self, uuid_id: int) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(
-            types.InlineKeyboardButton("⏱ مصرف بازه‌ای", callback_data=f"win_select_{uuid_id}"),
-            types.InlineKeyboardButton(f"{EMOJIS['globe']} دریافت لینک‌ها", callback_data=f"getlinks_{uuid_id}")
-        )
-        kb.add(
-            types.InlineKeyboardButton("🗑 حذف", callback_data=f"del_{uuid_id}"),
-            types.InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="manage")
-        )
-        return kb
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                types.InlineKeyboardButton("⏱ مصرف بازه‌ای", callback_data=f"win_select_{uuid_id}"),
+                types.InlineKeyboardButton(f"{EMOJIS['globe']} دریافت لینک‌ها", callback_data=f"getlinks_{uuid_id}")
+            )
+            kb.add(
+                types.InlineKeyboardButton("💳 سابقه پرداخت", callback_data=f"payment_history_{uuid_id}_0"),
+                types.InlineKeyboardButton("🗑 حذف", callback_data=f"del_{uuid_id}")
+            )
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="manage"))
+            return kb
 
     def quick_stats_menu(self, num_accounts: int, current_page: int) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
@@ -134,17 +147,22 @@ class Menu:
 
     ### 2. User Management ###
     def admin_management_menu(self) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(
-            types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
-            types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
-        )
-        kb.add(
-            types.InlineKeyboardButton("⚙️ دستورات گروهی ", callback_data="admin:group_action_select_plan"),
-            types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:sg")
-        )
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:panel"))
-        return kb
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                types.InlineKeyboardButton("آلمان 🇩🇪", callback_data="admin:manage_panel:hiddify"),
+                types.InlineKeyboardButton("فرانسه 🇫🇷", callback_data="admin:manage_panel:marzban")
+            )
+            kb.add(
+                types.InlineKeyboardButton("⚙️ دستور گروهی (بر اساس پلن)", callback_data="admin:group_action_select_plan"),
+                types.InlineKeyboardButton("🔥 دستور گروهی (پیشرفته)", callback_data="admin:adv_ga_select_filter")
+            )
+            kb.add(
+                types.InlineKeyboardButton("🔎 جستجوی جامع کاربر", callback_data="admin:sg"),
+                types.InlineKeyboardButton("🆔 جستجو با آیدی تلگرام", callback_data="admin:search_by_tid")
+            )
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:panel"))
+
+            return kb
 
     def admin_panel_management_menu(self, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=1)
@@ -156,20 +174,25 @@ class Menu:
         return kb
 
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str, back_callback: str | None = None) -> types.InlineKeyboardMarkup:
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
-        kb.add(types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"))
-        kb.add(types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{panel}:{identifier}"))
-        kb.add(types.InlineKeyboardButton("💳 ثبت پرداخت", callback_data=f"admin:log_payment:{panel}:{identifier}"),
-               types.InlineKeyboardButton("📜 سابقه پرداخت", callback_data=f"admin:payment_history:{panel}:{identifier}:0"))
-        kb.add(
-            types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
-            types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{panel}:{identifier}")
-        )
-        kb.add(types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{panel}:{identifier}"))
-        final_back_callback = back_callback or f"admin:manage_panel:{panel}"
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=final_back_callback))
-        return kb
+            kb = types.InlineKeyboardMarkup(row_width=2)
+            status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
+            kb.add(
+                types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"),
+                types.InlineKeyboardButton("📝 یادداشت ادمین", callback_data=f"admin:note:{panel}:{identifier}")
+            )
+            kb.add(types.InlineKeyboardButton("💳 ثبت پرداخت", callback_data=f"admin:log_payment:{panel}:{identifier}"),
+                types.InlineKeyboardButton("📜 سابقه پرداخت", callback_data=f"admin:payment_history:{panel}:{identifier}:0"))
+            kb.add(
+                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
+                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{panel}:{identifier}")
+            )
+            kb.add(
+                types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{panel}:{identifier}"),
+                types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{panel}:{identifier}")
+            )
+            final_back_callback = back_callback or f"admin:manage_panel:{panel}"
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=final_back_callback))
+            return kb
 
     def admin_edit_user_menu(self, identifier: str, panel: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
@@ -258,13 +281,15 @@ class Menu:
             kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:management_menu"))
             return kb
 
-    def admin_select_action_type_menu(self, plan_index: int) -> types.InlineKeyboardMarkup:
+    def admin_select_action_type_menu(self, context_value: any, context_type: str) -> types.InlineKeyboardMarkup:
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
-            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ga_ask_value:add_gb:{plan_index}"),
-            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ga_ask_value:add_days:{plan_index}")
+            types.InlineKeyboardButton("➕ افزودن حجم", callback_data=f"admin:ga_ask_value:add_gb:{context_type}:{context_value}"),
+            types.InlineKeyboardButton("➕ افزودن روز", callback_data=f"admin:ga_ask_value:add_days:{context_type}:{context_value}")
         )
-        kb.add(types.InlineKeyboardButton("🔙 بازگشت به انتخاب پلن", callback_data="admin:group_action_select_plan"))
+        
+        back_cb = "admin:group_action_select_plan" if context_type == 'plan' else "admin:adv_ga_select_filter"
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=back_cb))
         return kb
 
     def broadcast_target_menu(self) -> types.InlineKeyboardMarkup:
@@ -325,6 +350,14 @@ class Menu:
             types.InlineKeyboardButton("❌ بله، حذف کن", callback_data=f"admin:del_a:confirm:{panel_short}:{identifier}"),
             types.InlineKeyboardButton("✅ نه، لغو کن", callback_data=f"admin:del_a:cancel:{panel_short}:{identifier}")
         )
+        return kb
+    
+    def admin_advanced_group_action_filter_menu(self) -> types.InlineKeyboardMarkup:
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        kb.add(types.InlineKeyboardButton("⏳ کاربران در آستانه انقضا (کمتر از ۳ روز)", callback_data="admin:adv_ga_select_action:expiring_soon"))
+        kb.add(types.InlineKeyboardButton("🚫 کاربران غیرفعال (بیش از ۳۰ روز)", callback_data="admin:adv_ga_select_action:inactive_30_days"))
+        # Add other filters here in the future
+        kb.add(types.InlineKeyboardButton("🔙 بازگشت به مدیریت", callback_data="admin:management_menu"))
         return kb
 
 
