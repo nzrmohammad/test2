@@ -27,7 +27,7 @@ def _delete_user_message(msg: types.Message):
 
 def _start_add_user_convo(uid, msg_id):
     admin_conversations[uid] = {'msg_id': msg_id, 'panel': 'hiddify'}
-    prompt = "افزودن کاربر به پنل آلمان \\(Hiddify\\) 🇩🇪\n\n1\\. لطفاً یک **نام** برای کاربر جدید وارد کنید:"
+    prompt = "افزودن کاربر به پنل آلمان (Hiddify) 🇩🇪\n\n1. لطفاً یک **نام** برای کاربر جدید وارد کنید:"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:manage_panel:hiddify"))
     bot.register_next_step_handler_by_chat_id(uid, _get_name_for_add_user)
 
@@ -42,7 +42,7 @@ def _get_name_for_add_user(msg: types.Message):
         
         msg_id = admin_conversations[uid].get('msg_id')
         admin_conversations[uid]['name'] = name
-        prompt = f"نام کاربر: `{escape_markdown(name)}`\n\n2\\. حالا **مدت زمان** پلن \\(به روز\\) را وارد کنید \\(مثلاً: `30`\\):"
+        prompt = f"نام کاربر: `{escape_markdown(name)}`\n\n2. حالا **مدت زمان** پلن (به روز) را وارد کنید (مثلاً: `30`):"
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:manage_panel:hiddify"))
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_user)
     finally:
@@ -62,12 +62,12 @@ def _get_days_for_add_user(msg: types.Message):
         days = int(days_text)
         admin_conversations[uid]['package_days'] = days
         name = admin_conversations[uid]['name']
-        prompt = f"نام: `{escape_markdown(name)}`, مدت: `{days}` روز\n\n3\\. در نهایت، **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
+        prompt = f"نام: `{escape_markdown(name)}`, مدت: `{days}` روز\n\n3. در نهایت، **حجم کل مصرف** (به گیگابایت) را وارد کنید (عدد `0` برای نامحدود):"
         _safe_edit(uid, admin_conversations[uid]['msg_id'], prompt, reply_markup=menu.cancel_action("admin:manage_panel:hiddify"))
         bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_user)
 
     except (ValueError, TypeError):
-        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد صحیح برای روز وارد کنید.", parse_mode="MarkdownV2")
+        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد صحیح برای روز وارد کنید.")
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_user)
 
     finally:
@@ -86,17 +86,17 @@ def _get_limit_for_add_user(msg: types.Message):
         limit = float(limit_text)
         admin_conversations[uid]['usage_limit_GB'] = limit
         prompt = (
-            "4\\. لطفاً **حالت مصرف** را با ارسال عدد مورد نظر انتخاب کنید:\n\n"
-            "`1` \\- ماهانه \\(monthly\\)\n"
-            "`2` \\- هفتگی \\(weekly\\)\n"
-            "`3` \\- روزانه \\(daily\\)\n"
-            "`4` \\- بدون ریست \\(حجم کل برای تمام دوره\\)"
+            "4. لطفاً **حالت مصرف** را با ارسال عدد مورد نظر انتخاب کنید:\n\n"
+            "`1` - ماهانه (monthly)\n"
+            "`2` - هفتگی (weekly)\n"
+            "`3` - روزانه (daily)\n"
+            "`4` - بدون ریست (حجم کل برای تمام دوره)"
         )
         _safe_edit(uid, admin_conversations[uid]['msg_id'], prompt, reply_markup=menu.cancel_action("admin:manage_panel:hiddify"))
         bot.register_next_step_handler_by_chat_id(uid, _get_mode_for_add_user)
 
     except (ValueError, TypeError):
-        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد برای حجم وارد کنید.", parse_mode="MarkdownV2")
+        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد برای حجم وارد کنید.")
         bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_user)
     finally:
         if limit_text.startswith('/'):
@@ -114,7 +114,7 @@ def _get_mode_for_add_user(msg: types.Message):
         
         mode_map = {'1': 'monthly', '2': 'weekly', '3': 'daily', '4': 'no_reset'}
         if choice not in mode_map:
-            bot.send_message(uid, "❌ انتخاب نامعتبر است. لطفاً عددی بین ۱ تا ۴ وارد کنید.", parse_mode="MarkdownV2")
+            bot.send_message(uid, "❌ انتخاب نامعتبر است. لطفاً عددی بین ۱ تا ۴ وارد کنید.")
             bot.register_next_step_handler_by_chat_id(uid, _get_mode_for_add_user)
             return
         
@@ -131,13 +131,14 @@ def _finish_user_creation(uid, user_data):
     limit_gb_escaped = escape_markdown(f"{user_data.get('usage_limit_GB', 0.0):.1f}")
     days_escaped = escape_markdown(str(user_data.get('package_days', 'N/A')))
     mode_escaped = escape_markdown(user_data.get('mode', 'N/A'))
-
+    
+    list_bullet = escape_markdown("> ")
     wait_msg_text = (
         f"⏳ در حال ساخت کاربر با اطلاعات زیر:\n"
-        f"\\> نام: `{name_escaped}`\n"
-        f"\\> حجم: `{limit_gb_escaped} GB`\n"
-        f"\\> مدت: `{days_escaped}` روز\n"
-        f"\\> حالت: `{mode_escaped}`"
+        f"{list_bullet}نام: `{name_escaped}`\n"
+        f"{list_bullet}حجم: `{limit_gb_escaped} GB`\n"
+        f"{list_bullet}مدت: `{days_escaped}` روز\n"
+        f"{list_bullet}حالت: `{mode_escaped}`"
     )
     _safe_edit(uid, msg_id, wait_msg_text)
 
@@ -145,7 +146,7 @@ def _finish_user_creation(uid, user_data):
     if new_user_info and new_user_info.get('uuid'):
         final_info = combined_handler.get_combined_user_info(new_user_info['uuid'])
         text = fmt_admin_user_summary(final_info)
-        success_text = f"✅ کاربر با موفقیت ساخته شد\\.\n\n{text}"
+        success_text = f"✅ کاربر با موفقیت ساخته شد.\n\n{text}"
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('hiddify'))
     else:
         err_msg = "❌ خطا در ساخت کاربر. ممکن است نام تکراری باشد یا پنل در دسترس نباشد."
@@ -190,7 +191,7 @@ def _handle_plan_selection(call, params):
 
     plan_name_escaped = escape_markdown(selected_plan.get('name', ''))
     
-    prompt = f"شما پلن *{plan_name_escaped}* را انتخاب کردید\\.\n\nحالا لطفاً یک **نام کاربری** برای کاربر جدید وارد کنید:"
+    prompt = f"شما پلن *{plan_name_escaped}* را انتخاب کردید.\n\nحالا لطفاً یک **نام کاربری** برای کاربر جدید وارد کنید:"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action(f"admin:manage_panel:{panel}"))
     bot.register_next_step_handler_by_chat_id(uid, _get_name_for_plan_user)
 

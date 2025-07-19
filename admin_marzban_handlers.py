@@ -24,7 +24,7 @@ def _delete_user_message(msg: types.Message):
 
 def _start_add_marzban_user_convo(uid, msg_id):
     admin_conversations[uid] = {'msg_id': msg_id, 'panel': 'marzban'}
-    prompt = "افزودن کاربر به پنل فرانسه \\(مرزبان\\) 🇫🇷\n\n1\\. لطفاً یک **نام کاربری** وارد کنید \\(حروف انگلیسی، اعداد و آندرلاین\\):"
+    prompt = "افزودن کاربر به پنل فرانسه (مرزبان) 🇫🇷\n\n1. لطفاً یک **نام کاربری** وارد کنید (حروف انگلیسی، اعداد و آندرلاین):"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:manage_panel:marzban"))
     bot.register_next_step_handler_by_chat_id(uid, _get_name_for_add_marzban_user)
 
@@ -47,7 +47,7 @@ def _get_name_for_add_marzban_user(msg: types.Message):
 
         msg_id = admin_conversations[uid].get('msg_id')
         admin_conversations[uid]['username'] = name
-        prompt = f"نام کاربری: `{escape_markdown(name)}`\n\n2\\. حالا **حجم کل مصرف** \\(به گیگابایت\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
+        prompt = f"نام کاربری: `{escape_markdown(name)}`\n\n2. حالا **حجم کل مصرف** (به گیگابایت) را وارد کنید (عدد `0` برای نامحدود):"
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.cancel_action("admin:manage_panel:marzban"))
         bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_marzban_user)
     finally:
@@ -69,12 +69,12 @@ def _get_limit_for_add_marzban_user(msg: types.Message):
         admin_conversations[uid]['usage_limit_GB'] = limit
         name = admin_conversations[uid]['username']
         limit_str = escape_markdown(f"{limit:.1f}")
-        prompt = f"نام کاربری: `{escape_markdown(name)}`, حجم: `{limit_str} GB`\n\n3\\. در نهایت، **مدت زمان** پلن \\(به روز\\) را وارد کنید \\(عدد `0` برای نامحدود\\):"
+        prompt = f"نام کاربری: `{escape_markdown(name)}`, حجم: `{limit_str} GB`\n\n3. در نهایت، **مدت زمان** پلن (به روز) را وارد کنید (عدد `0` برای نامحدود):"
         _safe_edit(uid, admin_conversations[uid]['msg_id'], prompt, reply_markup=menu.cancel_action("admin:manage_panel:marzban"))
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_marzban_user)
 
     except (ValueError, TypeError):
-        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد برای حجم وارد کنید.", parse_mode="MarkdownV2")
+        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد برای حجم وارد کنید.")
         bot.register_next_step_handler_by_chat_id(uid, _get_limit_for_add_marzban_user)
     finally:
         if limit_text.startswith('/'):
@@ -96,7 +96,7 @@ def _get_days_for_add_marzban_user(msg: types.Message):
         _finish_marzban_user_creation(uid, admin_conversations[uid]['msg_id'])
 
     except (ValueError, TypeError):
-        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد صحیح برای روز وارد کنید.", parse_mode="MarkdownV2")
+        bot.send_message(uid, "❌ ورودی نامعتبر. لطفاً یک عدد صحیح برای روز وارد کنید.")
         bot.register_next_step_handler_by_chat_id(uid, _get_days_for_add_marzban_user)
     finally:
         # Cleanup if canceled or finished
@@ -112,16 +112,16 @@ def _finish_marzban_user_creation(uid, msg_id):
         return
 
     username_escaped = escape_markdown(user_data.get('username', ''))
-    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\\> نام کاربری: `{username_escaped}`"
+    list_bullet = escape_markdown("> ")
+    wait_msg = f"⏳ در حال ساخت کاربر در پنل مرزبان...\n{list_bullet}نام کاربری: `{username_escaped}`"
     _safe_edit(uid, msg_id, wait_msg)
     
     new_user_info = marzban_handler.add_user(user_data)
     
     if new_user_info and new_user_info.get('username'):
-        # FIX: Use the combined handler to get a clean, single-panel report
         final_info = combined_handler.get_combined_user_info(new_user_info['username'])
         text = fmt_admin_user_summary(final_info)
-        success_text = f"✅ کاربر با موفقیت ساخته شد\\.\n\n{text}"
+        success_text = f"✅ کاربر با موفقیت ساخته شد.\n\n{text}"
         _safe_edit(uid, msg_id, success_text, reply_markup=menu.admin_panel_management_menu('marzban'))
     else:
         err_msg = "❌ خطا در ساخت کاربر. ممکن است نام تکراری باشد یا پنل در دسترس نباشد."

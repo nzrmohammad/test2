@@ -26,7 +26,7 @@ def handle_ask_action_value(call, params):
 
     convo_data = admin_conversations.get(uid, {})
     if convo_data.get('action_type') == 'advanced_group_action' and convo_data.get('filter_type') == context_value:
-        target_users = convo_data['target_users']
+        target_users = convo_data.get('target_users', [])
         plan_or_filter_name = f"فیلتر «{context_value.replace('_', ' ')}»"
     
     elif context_type == 'plan':
@@ -49,11 +49,11 @@ def handle_ask_action_value(call, params):
         plan_or_filter_name = f"پلن «{escape_markdown(selected_plan.get('name', ''))}»"
 
     else: # Should not happen
-        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات زمینه یافت نشد\\.")
+        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات زمینه یافت نشد.")
         return
 
     if not target_users:
-        prompt = f"❌ هیچ کاربری منطبق با {plan_or_filter_name} یافت نشد\\."
+        prompt = f"❌ هیچ کاربری منطبق با {plan_or_filter_name} یافت نشد."
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_panel())
         return
 
@@ -71,7 +71,7 @@ def handle_ask_action_value(call, params):
     }
     value_type_str = escape_markdown(prompt_map.get(action_type, "مقدار"))
 
-    prompt = (f"شما *{plan_or_filter_name}* را انتخاب کردید \\(شامل *{user_count}* کاربر\\)\\.\n\n"
+    prompt = (f"شما *{plan_or_filter_name}* را انتخاب کردید (شامل *{user_count}* کاربر).\n\n"
               f"حالا لطفاً مقدار *{value_type_str}* که می‌خواهید به این کاربران اضافه شود را وارد کنید:")
     
     # Unified cancel button
@@ -84,15 +84,20 @@ def _apply_group_action(message: types.Message):
     if uid not in admin_conversations: return
     
     convo_data = admin_conversations.pop(uid, {})
-    msg_id = convo_data['msg_id']
-    plan = convo_data['plan']
-    action_type = convo_data['action_type']
-    target_users = convo_data['target_users']
+    # --- FIX: Using .get() to prevent KeyError ---
+    msg_id = convo_data.get('msg_id')
+    action_type = convo_data.get('action_type')
+    target_users = convo_data.get('target_users', [])
+
+    if not all([msg_id, action_type, target_users]):
+        logger.error(f"Incomplete conversation data for user {uid} in _apply_group_action.")
+        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات عملیات ناقص است.", reply_markup=menu.admin_panel())
+        return
 
     try:
         value = float(text)
     except ValueError:
-        _safe_edit(uid, msg_id, "❌ مقدار وارد شده نامعتبر است. لطفاً یک عدد وارد کنید.", reply_markup=menu.admin_plan_analytics_menu())
+        _safe_edit(uid, msg_id, "❌ مقدار وارد شده نامعتبر است. لطفاً یک عدد وارد کنید.", reply_markup=menu.admin_panel())
         return
 
     _safe_edit(uid, msg_id, f"⏳ در حال اجرای دستور روی *{len(target_users)}* کاربر...")
@@ -102,7 +107,7 @@ def _apply_group_action(message: types.Message):
 
     success_count, fail_count = 0, 0
     for user in target_users:
-        identifier = user.get('uuid') or user.get('name')
+        identifier = user.get('uuid') or user.get('username')
         if combined_handler.modify_user_on_all_panels(identifier, add_gb=add_gb, add_days=add_days):
             success_count += 1
         else:
@@ -111,7 +116,7 @@ def _apply_group_action(message: types.Message):
     final_text = (f"✅ عملیات گروهی با موفقیت انجام شد.\n\n"
                   f"به *{success_count}* کاربر اعمال شد.\n"
                   f"عملیات برای *{fail_count}* کاربر ناموفق بود.")
-    _safe_edit(uid, msg_id, final_text, reply_markup=menu.admin_plan_analytics_menu())
+    _safe_edit(uid, msg_id, final_text, reply_markup=menu.admin_panel())
 
 def handle_select_action_type(call, params):
     plan_index = int(params[0])
@@ -136,7 +141,7 @@ def handle_select_action_for_filter(call, params):
     filter_type = params[0]
     uid, msg_id = call.from_user.id, call.message.message_id
 
-    _safe_edit(uid, msg_id, "⏳ در حال فیلتر کردن کاربران، لطفاً صبر کنید\\.\\.\\.")
+    _safe_edit(uid, msg_id, "⏳ در حال فیلتر کردن کاربران، لطفاً صبر کنید...")
 
     all_users = combined_handler.get_all_users_combined()
     target_users = []
@@ -155,7 +160,7 @@ def handle_select_action_for_filter(call, params):
                 target_users.append(user)
     
     if not target_users:
-        prompt = "❌ هیچ کاربری با این فیلتر یافت نشد\\."
+        prompt = "❌ هیچ کاربری با این فیلتر یافت نشد."
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_advanced_group_action_filter_menu())
         return
 
@@ -171,6 +176,5 @@ def handle_select_action_for_filter(call, params):
     prompt = (f"✅ *{user_count}* کاربر با فیلتر «{filter_display_name}» یافت شد.\n\n"
               f"حالا لطفاً دستوری که می‌خواهید روی این کاربران اجرا شود را انتخاب کنید:")
     
-
     kb = menu.admin_select_action_type_menu(filter_type, 'filter')
     _safe_edit(uid, msg_id, prompt, reply_markup=kb)

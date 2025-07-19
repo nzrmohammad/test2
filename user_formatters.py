@@ -16,6 +16,8 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     status_emoji = "🟢" if info.get("is_active") else "🔴"
     status_text = "فعال" if info.get("is_active") else "غیرفعال"
     
+    name_line = f"{EMOJIS['user']} *نام :* {name} \\({status_emoji} {status_text}\\)"
+
     total_limit_gb = escape_markdown(f"{info.get('usage_limit_GB', 0):.2f}")
     total_usage_gb = escape_markdown(f"{info.get('current_usage_GB', 0):.2f}")
     total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f}")
@@ -43,7 +45,7 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     usage_percentage = info.get("usage_percentage", 0)
     bar = create_progress_bar(usage_percentage) 
 
-    report = f"""{EMOJIS['user']} *نام :* {name} \\({status_emoji} {status_text}\\)
+    report = f"""{name_line}
 
 {EMOJIS['database']} *مجموع حجم :* `{total_limit_gb} GB`
 {EMOJIS['fire']} *مجموع مصرف شده :* `{total_usage_gb} GB`
@@ -70,11 +72,10 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
 *وضعیت :* {bar}"""
     return report
 
-
 def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     num_uuids = len(uuid_rows)
     menu_data = {"num_accounts": num_uuids, "current_page": 0}
-    if not num_uuids: return "هیچ اکانتی ثبت نشده است\\.", menu_data
+    if not num_uuids: return "هیچ اکانتی ثبت نشده است", menu_data
 
     current_page = max(0, min(page, num_uuids - 1))
     menu_data["current_page"] = current_page
@@ -84,9 +85,12 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     
     if not info: return f"❌ خطا در دریافت اطلاعات برای اکانت در صفحه {current_page + 1}", menu_data
 
-    daily_usage_dict = db.get_usage_since_midnight(target_row['id'])
-    name_escaped = escape_markdown(info.get("name", "کاربر ناشناس"))
+    raw_name = info.get("name", "کاربر ناشناس")
+    title_content = f"آمار اکانت {current_page + 1} از {num_uuids} ({raw_name})"
+    escaped_title = escape_markdown(title_content)
 
+    daily_usage_dict = db.get_usage_since_midnight(target_row['id'])
+    
     h_info = info.get('breakdown', {}).get('hiddify', {})
     m_info = info.get('breakdown', {}).get('marzban', {})
 
@@ -108,7 +112,7 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     daily_m_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
     daily_total_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
 
-    report = f"""*آمار اکانت {current_page + 1} از {num_uuids} \\({name_escaped}\\)*
+    report = f"""*{escaped_title}*
 
 *{EMOJIS['database']} حجم کل*
 `آلمان` 🇩🇪 : `{limit_h_str} GB`
@@ -169,7 +173,7 @@ def fmt_user_report(user_infos: list) -> str:
         )
 
     if not accounts_details:
-        return "اطلاعات هیچ یک از اکانت‌های شما دریافت نشد."
+        return "اطلاعات هیچ یک از اکانت‌های شما دریافت نشد"
     
     report_body = "\n\n".join(accounts_details)
     total_daily_all = total_daily_hiddify + total_daily_marzban
@@ -183,16 +187,13 @@ def fmt_user_report(user_infos: list) -> str:
     return f"{report_body}\n\n" + "\n".join(footer)
 
 def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
-    """
-    لیست پلن‌های سرویس را برای نمایش به کاربر فرمت می‌کند.
-    """
     if not plans_to_show:
-        return "در حال حاضر پلن فعالی برای نمایش در این دسته وجود ندارد."
+        return "در حال حاضر پلن فعالی برای نمایش در این دسته وجود ندارد"
     
     type_title = "ترکیبی" if plan_type == "combined" else "آلمان"
     
-    # **تغییر اصلی: escape کردن پرانتزها و محتوای داخل آنها در عنوان**
-    title_text = f"*{EMOJIS['rocket']} پلن‌های فروش سرویس \\({escape_markdown(type_title)}\\)*"
+    title_content = f"{EMOJIS['rocket']} پلن‌های فروش سرویس ({type_title})"
+    title_text = f"*{escape_markdown(title_content)}*"
     lines = [title_text]
     
     for plan in plans_to_show:
@@ -210,9 +211,9 @@ def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
                 
     lines.append("`────────────────────`")
     if plan_type == "combined":
-        lines.append(escape_markdown("نکته: حجم 🇫🇷 قابل تبدیل به 🇩🇪 هست ولی 🇩🇪 قابل تبدیل به 🇫🇷 نیست."))
+        lines.append(escape_markdown("نکته: حجم 🇫🇷 قابل تبدیل به 🇩🇪 هست ولی 🇩🇪 قابل تبدیل به 🇫🇷 نیست"))
     
-    lines.append(escape_markdown("برای اطلاع از قیمت‌ها و دریافت مشاوره، لطفاً به ادمین پیام دهید."))
+    lines.append(escape_markdown("برای اطلاع از قیمت‌ها و دریافت مشاوره، لطفاً به ادمین پیام دهید"))
     
     return "\n".join(lines)
 
@@ -221,14 +222,14 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
     
     lines = [title, ""]
     if not stats:
-        lines.append("اطلاعاتی برای نمایش وجود ندارد\\.")
+        lines.append("اطلاعاتی برای نمایش وجود ندارد")
         return "\n".join(lines)
         
     for hours, usage_gb in stats.items():
         usage_str = format_daily_usage(usage_gb)
         lines.append(f"`• {hours}` ساعت گذشته: `{escape_markdown(usage_str)}`")
         
-    lines.append("\n*نکته:* این آمار تجمعی است\\. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد\\.")
+    lines.append(escape_markdown("\n*نکته:* این آمار تجمعی است. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد"))
         
     return "\n".join(lines)
 
@@ -236,7 +237,7 @@ def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
     title = f"💳 *سابقه پرداخت‌های اکانت {escape_markdown(user_name)}*"
     
     if not payments:
-        return f"{title}\n\nهیچ سابقه پرداختی برای این اکانت ثبت نشده است\\."
+        return f"{title}\n\nهیچ سابقه پرداختی برای این اکانت ثبت نشده است"
 
     header_text = title
     if len(payments) > PAGE_SIZE:
@@ -254,9 +255,7 @@ def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
     return "\n".join(lines)
 
 def fmt_registered_birthday_info(user_data: dict) -> str:
-    """
-    Creates a beautiful message for users who have already registered their birthday.
-    """
+
     if not user_data or not user_data.get('birthday'):
         return "خطایی در دریافت اطلاعات تولد رخ داد."
 
@@ -268,11 +267,11 @@ def fmt_registered_birthday_info(user_data: dict) -> str:
     
     lines = [header, "`────────────────────`"]
     
-    lines.append(f"تاریخ ثبت شده: *{shamsi_date_str}*")
+    lines.append(f"تاریخ ثبت شده: *{escape_markdown(shamsi_date_str)}*")
 
     if remaining_days is not None:
         if remaining_days == 0:
-            lines.append("شمارش معکوس: *امروز تولد شماست\\! 🎉*")
+            lines.append("شمارش معکوس: *امروز تولد شماست\\!* 🎉")
             lines.append("\nهدیه شما به صورت خودکار به اکانتتان اضافه شده است\\.")
         else:
             lines.append(f"شمارش معکوس: *{remaining_days} روز* تا تولد بعدی شما باقی مانده است\\.")

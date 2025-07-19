@@ -62,6 +62,7 @@ class Menu:
         nav_buttons = []
         if num_accounts > 1:
             if current_page > 0:
+                # The missing quote is added back here
                 nav_buttons.append(types.InlineKeyboardButton("⬅️ اکانت قبلی", callback_data=f"qstats_acc_page_{current_page - 1}"))
             if current_page < num_accounts - 1:
                 nav_buttons.append(types.InlineKeyboardButton("اکانت بعدی ➡️", callback_data=f"qstats_acc_page_{current_page + 1}"))
@@ -170,20 +171,22 @@ class Menu:
     def admin_user_interactive_management(self, identifier: str, is_active: bool, panel: str, back_callback: str | None = None) -> types.InlineKeyboardMarkup:
             kb = types.InlineKeyboardMarkup(row_width=2)
             status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
+            
             kb.add(
-                types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{panel}:{identifier}"),
-                types.InlineKeyboardButton("📝 یادداشت ادمین", callback_data=f"admin:note:{panel}:{identifier}")
+                types.InlineKeyboardButton(status_text, callback_data=f"admin:tgl:{identifier}"),
+                types.InlineKeyboardButton("📝 یادداشت ادمین", callback_data=f"admin:note:{identifier}")
             )
-            kb.add(types.InlineKeyboardButton("💳 ثبت پرداخت", callback_data=f"admin:log_payment:{panel}:{identifier}"),
-                types.InlineKeyboardButton("📜 سابقه پرداخت", callback_data=f"admin:payment_history:{panel}:{identifier}:0"))
+            kb.add(types.InlineKeyboardButton("💳 ثبت پرداخت", callback_data=f"admin:log_payment:{identifier}"),
+                types.InlineKeyboardButton("📜 سابقه پرداخت", callback_data=f"admin:payment_history:{identifier}:0"))
             kb.add(
-                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{panel}:{identifier}"),
-                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{panel}:{identifier}")
+                types.InlineKeyboardButton("🔄 ریست مصرف", callback_data=f"admin:rusg_m:{identifier}"),
+                types.InlineKeyboardButton("🗑 حذف کامل", callback_data=f"admin:del_cfm:{identifier}")
             )
             kb.add(
-                types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{panel}:{identifier}"),
-                types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{panel}:{identifier}")
+                types.InlineKeyboardButton("🔧 ویرایش کاربر", callback_data=f"admin:edt:{identifier}"),
+                types.InlineKeyboardButton("🔄 ریست تاریخ تولد", callback_data=f"admin:rb:{identifier}")
             )
+
             final_back_callback = back_callback or f"admin:manage_panel:{panel}"
             kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=final_back_callback))
             return kb

@@ -10,8 +10,8 @@ from menu import menu
 from utils import validate_uuid, escape_markdown, load_custom_links, _safe_edit
 from user_formatters import fmt_one, quick_stats, fmt_service_plans, fmt_panel_quick_stats, fmt_user_payment_history, fmt_registered_birthday_info 
 from utils import load_service_plans
-import io # Add this to the top of the file
-import qrcode # Add this to the top of the file
+import io
+import qrcode
 
 logger = logging.getLogger(__name__)
 bot = telebot.TeleBot("YOUR_BOT_TOKEN")
@@ -19,13 +19,13 @@ bot = telebot.TeleBot("YOUR_BOT_TOKEN")
 def _save_first_uuid(message: types.Message):
     uid, uuid_str = message.from_user.id, message.text.strip().lower()
     if not validate_uuid(uuid_str):
-        m = bot.send_message(uid, "❌ `UUID` نامعتبر است\\. دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "❌ `UUID` نامعتبر است. دوباره تلاش کنید", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
         return
         
     info = combined_handler.get_combined_user_info(uuid_str)
     if not info:
-        m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید\\.", parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد. دوباره تلاش کنید", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
         return
 
@@ -35,27 +35,25 @@ def _save_first_uuid(message: types.Message):
         bot.send_message(uid, escape_markdown(status_message), reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
     else:
         bot.send_message(uid, escape_markdown(status_message), parse_mode="MarkdownV2")
-        m = bot.send_message(uid, "لطفاً یک `UUID` دیگر وارد کنید\\.", parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "لطفاً یک `UUID` دیگر وارد کنید", parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _save_first_uuid)
 
 def _add_uuid_step(message: types.Message):
     uid, uuid_str = message.from_user.id, message.text.strip().lower()
-    user_data = db.user(uid)
-    has_birthday = bool(user_data and user_data.get('birthday'))
 
     if uuid_str.startswith('/'):
         bot.clear_step_handler_by_chat_id(uid)
-        bot.send_message(uid, "عملیات افزودن اکانت لغو شد\\.", reply_markup=menu.main(uid in ADMIN_IDS, has_birthday), parse_mode="MarkdownV2")
+        bot.send_message(uid, "عملیات افزودن اکانت لغو شد", reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
         return
 
     if not validate_uuid(uuid_str):
-        m = bot.send_message(uid, "❌ `UUID` نامعتبر است\\. دوباره تلاش کنید یا عملیات را لغو کنید\\.", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "❌ `UUID` نامعتبر است. دوباره تلاش کنید یا عملیات را لغو کنید", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _add_uuid_step)
         return
 
     info = combined_handler.get_combined_user_info(uuid_str)
     if not info:
-        m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد\\. دوباره تلاش کنید یا عملیات را لغو کنید\\.", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "❌ `UUID` در پنل یافت نشد. دوباره تلاش کنید یا عملیات را لغو کنید", reply_markup=menu.cancel_action("manage"), parse_mode="MarkdownV2")
         if m: bot.register_next_step_handler(m, _add_uuid_step)
         return
     
@@ -67,16 +65,14 @@ def _get_birthday_step(message: types.Message):
     birthday_str = message.text.strip()
     
     try:
-        # --- MODIFIED: Parse Shamsi date and convert to Gregorian for storage ---
         shamsi_date = jdatetime.datetime.strptime(birthday_str, '%Y/%m/%d')
         gregorian_date = shamsi_date.togregorian().date()
         
         db.update_user_birthday(uid, gregorian_date)
-        bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد\\.",
-                         reply_markup=menu.main(uid in ADMIN_IDS, has_birthday=True), parse_mode="MarkdownV2")
+        bot.send_message(uid, "✅ تاریخ تولد شما با موفقیت ثبت شد",
+                         reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
     except ValueError:
-        # --- MODIFIED: Updated prompt for Shamsi format ---
-        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است\\. لطفاً به شکل شمسی `YYYY/MM/DD` وارد کنید \\(مثلاً `1370/01/15`\\)\\.", parse_mode="MarkdownV2")
+        m = bot.send_message(uid, "❌ فرمت تاریخ نامعتبر است. لطفاً به شکل شمسی `YYYY/MM/DD` وارد کنید (مثلاً `1370/01/15`)", parse_mode="MarkdownV2")
         bot.clear_step_handler_by_chat_id(uid)
         if m: bot.register_next_step_handler(m, _get_birthday_step)
 
@@ -108,10 +104,6 @@ def _show_settings(call: types.CallbackQuery):
     _safe_edit(call.from_user.id, call.message.message_id, "⚙️ *تنظیمات اعلان‌ها*", reply_markup=menu.settings(settings))
 
 def _go_back_to_main(call: types.CallbackQuery):
-    user_data = db.user(call.from_user.id)
-    # The has_birthday variable is no longer needed for the menu call
-    has_birthday = bool(user_data and user_data.get('birthday'))
-    # --- FIX: Removed the 'has_birthday' argument ---
     _safe_edit(call.from_user.id, call.message.message_id, "🏠 *منوی اصلی*", reply_markup=menu.main(call.from_user.id in ADMIN_IDS))
 
 def _handle_birthday_gift_request(call: types.CallbackQuery):
@@ -121,24 +113,18 @@ def _handle_birthday_gift_request(call: types.CallbackQuery):
     if user_data and user_data.get('birthday'):
         text = fmt_registered_birthday_info(user_data)
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
-        _safe_edit(uid, call.message.message_id, text, reply_markup=kb)
+        _safe_edit(uid, call.message.message_id, text, reply_markup=kb, parse_mode="MarkdownV2")
     else:
-        prompt = "لطفاً تاریخ تولد خود را به فرمت **شمسی** `YYYY/MM/DD` وارد کنید \\(مثلاً: `1370/01/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
-        _safe_edit(uid, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"))
+        prompt = "لطفاً تاریخ تولد خود را به فرمت *شمسی* `YYYY/MM/DD` وارد کنید \\(مثلاً: `1370/01/15`\\)\\.\n\nدر روز تولدتان از ما هدیه بگیرید\\!"
+        _safe_edit(uid, call.message.message_id, prompt, reply_markup=menu.cancel_action("back"), parse_mode="MarkdownV2")
         bot.register_next_step_handler_by_chat_id(uid, _get_birthday_step)
-
-def _show_plans(call: types.CallbackQuery):
-    text = fmt_service_plans()
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton(f"{EMOJIS['home']} بازگشت به منوی اصلی", callback_data="back"))
-    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def _show_plan_categories(call: types.CallbackQuery):
     prompt = "لطفاً دسته‌بندی سرویس مورد نظر خود را انتخاب کنید:"
     _safe_edit(call.from_user.id, call.message.message_id, prompt, reply_markup=menu.plan_category_menu())
 
 def _show_filtered_plans(call: types.CallbackQuery):
-    plan_type = call.data.split(":")[1] # مثلا 'combined' or 'germany'
+    plan_type = call.data.split(":")[1]
     
     all_plans = load_service_plans()
     filtered_plans = [p for p in all_plans if p.get("type") == plan_type]
@@ -154,17 +140,17 @@ def _handle_support_request(call: types.CallbackQuery):
         f"🙋‍♂️ *راهنمای پشتیبانی*\n\n"
         f"در صورت بروز هرگونه مشکل یا سوال در مورد سرویس خود، می‌توانید مستقیماً با ادمین در ارتباط باشید\\.\n\n"
         f"لطفاً برای تماس، به شناسه‌ی زیر پیام دهید:\n"
-        f"👤 **{escape_markdown(ADMIN_SUPPORT_CONTACT)}**"
+        f"👤 *{escape_markdown(ADMIN_SUPPORT_CONTACT)}*"
     )
     kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back"))
-    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
+    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb, parse_mode="MarkdownV2")
 
 USER_CALLBACK_MAP = {
     "add": _handle_add_uuid_request,
     "manage": _show_manage_menu,
     "quick_stats": _show_quick_stats,
     "settings": _show_settings,
-    "support": _handle_support_request, # --- ADD THIS LINE ---
+    "support": _handle_support_request,
     "back": _go_back_to_main,
     "birthday_gift": _handle_birthday_gift_request,
     "view_plans": _show_plan_categories,
@@ -197,7 +183,7 @@ def handle_user_callbacks(call: types.CallbackQuery):
             uuid_id = int(data.split("_")[1])
             row = db.uuid_by_id(call.from_user.id, uuid_id)
             if not row:
-                bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد\\.", show_alert=True)
+                bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد", show_alert=True)
                 return
 
             user_uuid = row['uuid']
@@ -218,9 +204,9 @@ def handle_user_callbacks(call: types.CallbackQuery):
                 
                 text = (
                     f"🔗 *لینک اشتراک شما آماده است*\n\n"
-                    f"۱\\. برای کپی کردن، روی لینک زیر ضربه بزنید:\n"
+                    f"۱. برای کپی کردن، روی لینک زیر ضربه بزنید:\n"
                     f"`{escape_markdown(full_sub_link)}`\n\n"
-                    f"۲\\. یا کد QR بالا را در اپلیکیشن خود اسکن کنید\\."
+                    f"۲. یا کد QR بالا را در اپلیکیشن خود اسکن کنید."
                 )
                 
                 kb = types.InlineKeyboardMarkup()
@@ -230,12 +216,12 @@ def handle_user_callbacks(call: types.CallbackQuery):
                 bot.send_photo(call.from_user.id, photo=stream, caption=text, reply_markup=kb, parse_mode="MarkdownV2")
 
             else:
-                bot.answer_callback_query(call.id, "❌ لینک سفارشی برای این اکانت در فایل json تعریف نشده است\\.", show_alert=True)
+                bot.answer_callback_query(call.id, "❌ لینک سفارشی برای این اکانت در فایل json تعریف نشده است", show_alert=True)
             
     elif data.startswith("del_"):
         uuid_id = int(data.split("_")[1])
         db.deactivate_uuid(uuid_id)
-        _safe_edit(call.from_user.id, call.message.message_id, "🗑 اکانت با موفقیت حذف شد\\.", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
+        _safe_edit(call.from_user.id, call.message.message_id, "🗑 اکانت با موفقیت حذف شد", reply_markup=menu.accounts(db.uuids(call.from_user.id)))
 
     elif data.startswith("win_hiddify_") or data.startswith("win_marzban_"):
         parts = data.split("_")
@@ -272,7 +258,7 @@ def handle_user_callbacks(call: types.CallbackQuery):
         
         row = db.uuid_by_id(uid, uuid_id)
         if not row:
-            bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد.", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد", show_alert=True)
             return
 
         payment_history = db.get_user_payment_history(uuid_id)
@@ -289,7 +275,6 @@ def handle_user_callbacks(call: types.CallbackQuery):
         return
 
 def register_user_handlers(b: telebot.TeleBot):
-    """Registers all message handlers for regular users."""
     global bot
     bot = b
 
@@ -303,8 +288,7 @@ def register_user_handlers(b: telebot.TeleBot):
         welcome_message = "🏠 *به منوی اصلی خوش آمدید*"
 
         if db.uuids(uid):
-            # --- FIX: Removed the 'has_birthday' argument from the call ---
             bot.send_message(uid, welcome_message, reply_markup=menu.main(uid in ADMIN_IDS), parse_mode="MarkdownV2")
         else:
-            m = bot.send_message(uid, "👋 *خوش آمدید\\!*\n\nلطفاً `UUID` اکانت خود را ارسال کنید\\.", parse_mode="MarkdownV2")
+            m = bot.send_message(uid, "👋 *خوش آمدید\\!*\n\nلطفاً `UUID` اکانت خود را ارسال کنید", parse_mode="MarkdownV2")
             if m: bot.register_next_step_handler(m, _save_first_uuid)

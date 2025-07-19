@@ -33,14 +33,14 @@ def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs):
         kwargs.setdefault('parse_mode', 'MarkdownV2')
         bot.edit_message_text(text=text, chat_id=chat_id, message_id=msg_id, **kwargs)
     except Exception as e:
-        if 'message not found' not in str(e) and 'message is not modified' not in str(e):
-            logger.error(f"Safe edit failed: {e}")
-        else:
-            pass
+        # این لاگ به شما می‌گوید که مشکل دقیقاً چیست
+        logger.error(f"Safe edit failed: {e}. Text was: \n---\n{text}\n---")
+        # می‌توانید پیام خطا را برای ادمین هم بفرستید تا سریع‌تر متوجه شوید
+        # bot.send_message(chat_id, f"Error rendering message: {e}")
 
 def escape_markdown(text: Union[str, int, float]) -> str:
     text = str(text)
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    escape_chars = r'_*[]()~`>#+-=|{}.!%'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 def format_relative_time(dt: Optional[datetime]) -> str:
@@ -111,22 +111,23 @@ def parse_volume_string(volume_str: str) -> int:
         return int(numbers[0])
     return 0
 
-def gregorian_to_shamsi_str(gregorian_date: Optional[datetime.date]) -> str:
-    """Converts a gregorian date object to a Shamsi date string (YYYY/MM/DD)."""
-    if not isinstance(gregorian_date, (datetime, jdatetime.date)):
-         # If it's a date object, convert to datetime first
-        if isinstance(gregorian_date, jdatetime.date):
-            gregorian_date = gregorian_date.togregorian()
-        try:
-            gregorian_date = datetime.combine(gregorian_date, datetime.min.time())
-        except (TypeError, AttributeError):
-            return "نامشخص"
-
+def gregorian_to_shamsi_str(gregorian_date: Optional[Union[datetime, datetime.date]]) -> str:
     if not gregorian_date:
         return "نامشخص"
+
+    # اگر ورودی از نوع date است، آن را به datetime تبدیل کن
+    if isinstance(gregorian_date, datetime.date) and not isinstance(gregorian_date, datetime):
+        gregorian_date = datetime.combine(gregorian_date, datetime.min.time())
+
+    # اگر ورودی از نوع معتبری نیست، خطا برگردان
+    if not isinstance(gregorian_date, datetime):
+        return "نامشخص"
         
-    j_date = jdatetime.datetime.fromgregorian(datetime=gregorian_date)
-    return j_date.strftime('%Y/%m/%d')
+    try:
+        j_date = jdatetime.datetime.fromgregorian(datetime=gregorian_date)
+        return j_date.strftime('%Y/%m/%d')
+    except (ValueError, TypeError):
+        return "نامشخص"
 
 def days_until_next_birthday(birthday: Optional[datetime.date]) -> Optional[int]:
     if not birthday:

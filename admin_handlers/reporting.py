@@ -40,14 +40,14 @@ def handle_analytics_menu(call, params):
 def handle_health_check(call, params):
     bot.answer_callback_query(call.id, "در حال دریافت اطلاعات پنل...")
     info = hiddify_handler.get_panel_info()
-    text = fmt_hiddify_panel_info(info) if info else "❌ اطلاعاتی دریافت نشد."
+    text = fmt_hiddify_panel_info(info) if info else escape_markdown("❌ اطلاعاتی دریافت نشد.")
     kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:analytics_menu:hiddify"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def handle_marzban_system_stats(call, params):
     bot.answer_callback_query(call.id, "در حال دریافت آمار سیستم مرزبان...")
     stats = marzban_handler.get_system_stats()
-    text = fmt_marzban_system_stats(stats) if stats else "❌ اطلاعاتی دریافت نشد."
+    text = fmt_marzban_system_stats(stats) if stats else escape_markdown("❌ اطلاعاتی دریافت نشد.")
     kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:analytics_menu:marzban"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
@@ -121,6 +121,23 @@ def handle_report_by_plan_selection(call, params):
     prompt = "لطفاً پلنی که می‌خواهید کاربران آن را مشاهده کنید، انتخاب نمایید:"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_select_plan_for_report_menu())
 
+def _find_users_matching_plan_specs(all_users, plan_specs_set, invert_match=False):
+    filtered_users = []
+    for user in all_users:
+        h_info = user.get('breakdown', {}).get('hiddify', {})
+        m_info = user.get('breakdown', {}).get('marzban', {})
+        
+        user_vol_de = h_info.get('usage_limit_GB', -1.0)
+        user_vol_fr = m_info.get('usage_limit_GB', -1.0)
+        user_spec = (user_vol_de, user_vol_fr)
+
+        is_match = user_spec in plan_specs_set
+        
+        if (invert_match and not is_match) or (not invert_match and is_match):
+            filtered_users.append(user)
+            
+    return filtered_users
+
 def handle_list_users_by_plan(call, params):
     plan_index, page = int(params[0]), int(params[1])
     uid, msg_id = call.from_user.id, call.message.message_id
@@ -129,25 +146,16 @@ def handle_list_users_by_plan(call, params):
 
     all_plans = load_service_plans()
     if plan_index >= len(all_plans):
-        _safe_edit(uid, msg_id, "❌ پلن انتخاب شده نامعتبر است.")
+        _safe_edit(uid, msg_id, escape_markdown("❌ پلن انتخاب شده نامعتبر است."), reply_markup=menu.admin_panel())
         return
         
     selected_plan = all_plans[plan_index]
     plan_vol_de = float(parse_volume_string(selected_plan.get('volume_de', '0')))
     plan_vol_fr = float(parse_volume_string(selected_plan.get('volume_fr', '0')))
-
-    all_users = combined_handler.get_all_users_combined()
     
-    filtered_users = []
-    for user in all_users:
-        h_info = user.get('breakdown', {}).get('hiddify', {})
-        m_info = user.get('breakdown', {}).get('marzban', {})
-        
-        user_vol_de = h_info.get('usage_limit_GB', -1.0)
-        user_vol_fr = m_info.get('usage_limit_GB', -1.0)
-
-        if user_vol_de == plan_vol_de and user_vol_fr == plan_vol_fr:
-             filtered_users.append(user)
+    plan_spec_to_match = {(plan_vol_de, plan_vol_fr)}
+    all_users = combined_handler.get_all_users_combined()
+    filtered_users = _find_users_matching_plan_specs(all_users, plan_spec_to_match, invert_match=False)
 
     plan_name_raw = selected_plan.get('name', '')
     text = fmt_users_by_plan_list(filtered_users, plan_name_raw, page)
@@ -156,6 +164,7 @@ def handle_list_users_by_plan(call, params):
     back_cb = "admin:report_by_plan_select"
     kb = menu.create_pagination_menu(base_cb, page, len(filtered_users), back_cb)
     _safe_edit(uid, msg_id, text, reply_markup=kb)
+
 
 def handle_list_users_no_plan(call, params):
     page = int(params[0])
@@ -172,16 +181,7 @@ def handle_list_users_no_plan(call, params):
         vol_fr = parse_volume_string(plan.get('volume_fr', '0'))
         plan_specs.add((float(vol_de), float(vol_fr)))
 
-    users_without_plan = []
-    for user in all_users:
-        h_info = user.get('breakdown', {}).get('hiddify', {})
-        m_info = user.get('breakdown', {}).get('marzban', {})
-        
-        user_vol_de = h_info.get('usage_limit_GB', -1.0)
-        user_vol_fr = m_info.get('usage_limit_GB', -1.0)
-
-        if (user_vol_de, user_vol_fr) not in plan_specs:
-            users_without_plan.append(user)
+    users_without_plan = _find_users_matching_plan_specs(all_users, plan_specs, invert_match=True)
 
     text = fmt_users_by_plan_list(users_without_plan, "بدون پلن مشخص", page)
 

@@ -5,7 +5,7 @@ from datetime import datetime
 import schedule
 import pytz
 from telebot import apihelper, TeleBot
-from config import (DAILY_REPORT_TIME, TEHRAN_TZ, ADMIN_IDS,BIRTHDAY_GIFT_GB, BIRTHDAY_GIFT_DAYS, NOTIFY_ADMIN_ON_USAGE,
+from config import (DAILY_REPORT_TIME, TEHRAN_TZ, ADMIN_IDS,BIRTHDAY_GIFT_GB, BIRTHDAY_GIFT_DAYS,
                      WARNING_USAGE_THRESHOLD,WARNING_DAYS_BEFORE_EXPIRY,
                      USAGE_WARNING_CHECK_HOURS, ONLINE_REPORT_UPDATE_HOURS, EMOJIS,
                      DAILY_USAGE_ALERT_THRESHOLD_GB)
@@ -85,9 +85,9 @@ class SchedulerManager:
                     first_conn_time = u_row['first_connection_time'].replace(tzinfo=pytz.utc)
                     if (datetime.now(pytz.utc) - first_conn_time).total_seconds() >= 48 * 3600:
                         welcome_text = (
-                            f"🎉 *به جمع ما خوش آمدی\\!* 🎉\n\n"
-                            f"از اینکه به ما اعتماد کردی خوشحالیم\\. امیدواریم از کیفیت سرویس لذت ببری\\.\n\n"
-                            f"💬 در صورت داشتن هرگونه سوال یا نیاز به پشتیبانی، ما همیشه در کنار شما هستیم\\.\n\n"
+                            f"🎉 *به جمع ما خوش آمدی!* 🎉\n\n"
+                            f"از اینکه به ما اعتماد کردی خوشحالیم. امیدواریم از کیفیت سرویس لذت ببری.\n\n"
+                            f"💬 در صورت داشتن هرگونه سوال یا نیاز به پشتیبانی، ما همیشه در کنار شما هستیم.\n\n"
                             f"با آرزوی بهترین‌ها ✨"
                         )
                         try:
@@ -103,7 +103,7 @@ class SchedulerManager:
                     if expire_days is not None and 0 <= expire_days <= WARNING_DAYS_BEFORE_EXPIRY:
                         if not db.has_recent_warning(uuid_id_in_db, 'expiry'):
                             msg = (f"{EMOJIS['warning']} *هشدار انقضای اکانت*\n\n"
-                                f"اکانت *{user_name}* شما تا *{expire_days}* روز دیگر منقضی می‌شود\\.")
+                                f"اکانت *{user_name}* شما تا *{expire_days}* روز دیگر منقضی می‌شود.")
                             try:
                                 self.bot.send_message(user_id_in_telegram, msg, parse_mode="MarkdownV2")
                                 db.log_warning(uuid_id_in_db, 'expiry')
@@ -116,6 +116,7 @@ class SchedulerManager:
                     'hiddify': {'name': 'آلمان 🇩🇪', 'setting': 'data_warning_hiddify'},
                     'marzban': {'name': 'فرانسه 🇫🇷', 'setting': 'data_warning_marzban'}
                 }
+                list_bullet = escape_markdown("- ")
                 for code, details in server_map.items():
                     if user_settings.get(details['setting']) and code in breakdown and breakdown[code]:
                         server_info = breakdown[code]
@@ -129,8 +130,8 @@ class SchedulerManager:
                                     remaining_gb = max(0, limit - usage)
                                     server_name = details['name']
                                     msg = (f"{EMOJIS['warning']} *هشدار اتمام حجم*\n\n"
-                                        f"کاربر گرامی، حجم اکانت *{user_name}* شما در سرور *{server_name}* رو به اتمام است\\.\n"
-                                        f"\\- حجم باقیمانده: *{remaining_gb:.2f} GB*")
+                                        f"کاربر گرامی، حجم اکانت *{user_name}* شما در سرور *{server_name}* رو به اتمام است.\n"
+                                        f"{list_bullet}حجم باقیمانده: *{remaining_gb:.2f} GB*")
                                     try:
                                         self.bot.send_message(user_id_in_telegram, msg, parse_mode="MarkdownV2")
                                         db.log_warning(uuid_id_in_db, warning_type)
@@ -144,10 +145,11 @@ class SchedulerManager:
                     if total_daily_usage >= DAILY_USAGE_ALERT_THRESHOLD_GB:
                         warning_type = 'unusual_daily_usage'
                         if not db.has_recent_warning(uuid_id_in_db, warning_type, hours=24):
+                            list_bullet = escape_markdown("- ")
                             alert_msg = (f"{EMOJIS['warning']} *هشدار مصرف غیرعادی روزانه*\n\n"
-                                        f"کاربر *{user_name}* \\(`{escape_markdown(uuid_str)}`\\) از حد مجاز مصرف روزانه عبور کرده است\\.\n\n"
-                                        f"\\- *میزان مصرف امروز:* `{escape_markdown(format_daily_usage(total_daily_usage))}`\n"
-                                        f"\\- *حد مجاز تعریف شده:* `{DAILY_USAGE_ALERT_THRESHOLD_GB} GB`")
+                                        f"کاربر *{user_name}* (`{escape_markdown(uuid_str)}`) از حد مجاز مصرف روزانه عبور کرده است.\n\n"
+                                        f"{list_bullet}*میزان مصرف امروز:* `{escape_markdown(format_daily_usage(total_daily_usage))}`\n"
+                                        f"{list_bullet}*حد مجاز تعریف شده:* `{DAILY_USAGE_ALERT_THRESHOLD_GB} GB`")
                             for admin_id in ADMIN_IDS:
                                 try:
                                     self.bot.send_message(admin_id, alert_msg, parse_mode="MarkdownV2")
@@ -167,7 +169,7 @@ class SchedulerManager:
                 
             user_info_map = {user['uuid']: user for user in all_users_info_from_api}
             all_bot_users = db.get_all_user_ids()
-            separator = '\n' + '\\-' * 25 + '\n'
+            separator = '\n' + '─' * 25 + '\n'
 
             for user_id in all_bot_users:
                 user_settings = db.get_user_settings(user_id)
@@ -185,10 +187,10 @@ class SchedulerManager:
 
                 try:
                     if user_id in ADMIN_IDS:
-                        header = f"👑 *گزارش جامع ادمین* \\- {escape_markdown(now_str)}{separator}"
+                        header = f"👑 *گزارش جامع ادمین* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
                         report_text = fmt_admin_report(all_users_info_from_api, db)
                     elif user_infos_for_report:
-                        header = f"🌙 *گزارش روزانه شما* \\- {escape_markdown(now_str)}{separator}"
+                        header = f"🌙 *گزارش روزانه شما* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
                         report_text = fmt_user_report(user_infos_for_report)
 
                     if report_text:
@@ -217,10 +219,12 @@ class SchedulerManager:
                 online_list = [u for u in combined_handler.get_all_users_combined() if u.get('last_online') and (datetime.now(pytz.utc) - u['last_online']).total_seconds() < 180]
 
                 for user in online_list:
-                    user['daily_usage_GB'] = sum(db.get_usage_since_midnight_by_uuid(user['uuid']).values())
+                    if user.get('uuid'):
+                        user['daily_usage_GB'] = sum(db.get_usage_since_midnight_by_uuid(user['uuid']).values())
                 
                 text = fmt_online_users_list(online_list, 0)
-                kb = menu.create_pagination_menu("admin:list:online_users:both", 0, len(online_list), "admin:reports_menu:hiddify") # Dummy back button
+                # Note: The back button here is a placeholder as this is an automated update.
+                kb = menu.create_pagination_menu("admin:list:online_users:both", 0, len(online_list), "admin:reports_menu") 
                 
                 self.bot.edit_message_text(text, chat_id, message_id, reply_markup=kb, parse_mode="MarkdownV2")
                 time.sleep(0.5)
@@ -248,18 +252,17 @@ class SchedulerManager:
             gift_applied_successfully = False
             for row in user_uuids:
                 uuid = row['uuid']
-                # FIX: Use the new centralized function to apply the gift to all panels
                 if combined_handler.modify_user_on_all_panels(uuid, add_gb=BIRTHDAY_GIFT_GB, add_days=BIRTHDAY_GIFT_DAYS):
                     gift_applied_successfully = True
             
             if gift_applied_successfully:
                 try:
                     gift_message = (
-                        f"🎉 *تولدت مبارک\\!* 🎉\n\n"
-                        f"امیدواریم سالی پر از شادی و موفقیت پیش رو داشته باشی\\.\n"
+                        f"🎉 *تولدت مبارک!* 🎉\n\n"
+                        f"امیدواریم سالی پر از شادی و موفقیت پیش رو داشته باشی.\n"
                         f"ما به همین مناسبت، هدیه‌ای برای شما فعال کردیم:\n\n"
-                        f"🎁 `{BIRTHDAY_GIFT_GB} GB` حجم و `{BIRTHDAY_GIFT_DAYS}` روز به تمام اکانت‌های شما **به صورت خودکار اضافه شد\\!**\n\n"
-                        f"می‌توانی با مراجعه به بخش مدیریت اکانت، جزئیات جدید را مشاهده کنی\\."
+                        f"🎁 `{BIRTHDAY_GIFT_GB} GB` حجم و `{BIRTHDAY_GIFT_DAYS}` روز به تمام اکانت‌های شما **به صورت خودکار اضافه شد!**\n\n"
+                        f"می‌توانی با مراجعه به بخش مدیریت اکانت، جزئیات جدید را مشاهده کنی."
                     )
                     self.bot.send_message(user_id, gift_message, parse_mode="MarkdownV2")
                     logger.info(f"Scheduler: Sent birthday gift to user {user_id}.")

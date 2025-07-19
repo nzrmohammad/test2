@@ -3,12 +3,14 @@ import time
 from telebot import types
 import pytz
 from datetime import datetime, timedelta
+import re
 
 from database import db
 from hiddify_api_handler import hiddify_handler
 from marzban_api_handler import marzban_handler
 from menu import menu
-from utils import _safe_edit
+from utils import _safe_edit, escape_markdown 
+from telebot.apihelper import ApiTelegramException
 
 logger = logging.getLogger(__name__)
 bot, admin_conversations = None, None
@@ -71,10 +73,11 @@ def _send_broadcast(message: types.Message):
         target_user_ids = db.get_user_ids_by_uuids(uuids_to_fetch)
 
     if not target_user_ids:
+        safe_text = escape_markdown("هیچ کاربری در گروه هدف یافت نشد.")
         if original_msg_id:
-            _safe_edit(admin_id, original_msg_id, "هیچ کاربری در گروه هدف یافت نشد.", reply_markup=menu.admin_panel())
+            _safe_edit(admin_id, original_msg_id, safe_text, reply_markup=menu.admin_panel())
         else:
-            bot.send_message(admin_id, "هیچ کاربری در گروه هدف یافت نشد.")
+            bot.send_message(admin_id, safe_text, parse_mode='MarkdownV2')
         return
 
     unique_targets = set(target_user_ids) - {admin_id}
@@ -87,20 +90,21 @@ def _send_broadcast(message: types.Message):
         try:
             bot.copy_message(chat_id=user_id, from_chat_id=admin_id, message_id=message.message_id)
             success_count += 1
+        except ApiTelegramException as e:
+            if 'flood control' in e.description.lower():
+                retry_after = int(re.search(r'retry after (\d+)', e.description).group(1))
+                logger.warning(f"Flood control triggered. Sleeping for {retry_after} seconds.")
+                time.sleep(retry_after)
+                try:
+                    bot.copy_message(chat_id=user_id, from_chat_id=admin_id, message_id=message.message_id)
+                    success_count += 1
+                except Exception as retry_e:
+                    logger.error(f"Failed to send broadcast to {user_id} after flood wait: {retry_e}")
+                    fail_count += 1
+            else:
+                logger.warning(f"Failed to send broadcast to user {user_id}: {e}")
+                fail_count += 1
         except Exception as e:
-            logger.warning(f"Failed to send broadcast to user {user_id}: {e}")
+            logger.error(f"An unexpected error occurred sending to {user_id}: {e}")
             fail_count += 1
-        time.sleep(0.1)
-        
-    final_text = (f"✅ ارسال پیام همگانی تمام شد.\n"
-                  f"- ✔️ موفق: {success_count}\n"
-                  f"- ❌ ناموفق: {fail_count}")
-
-    final_kb = types.InlineKeyboardMarkup()
-    final_kb.add(types.InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data="admin:panel"))
-
-    if original_msg_id:
-        _safe_edit(admin_id, original_msg_id, final_text, parse_mode=None, reply_markup=final_kb)
-    else:
-        bot.send_message(admin_id, final_text, reply_markup=final_kb)
 

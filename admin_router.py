@@ -6,7 +6,6 @@ from admin_handlers import user_management, reporting, broadcast, backup, group_
 from admin_hiddify_handlers import _start_add_user_convo, _start_add_user_from_plan_convo, _handle_plan_selection, initialize_hiddify_handlers
 from admin_marzban_handlers import _start_add_marzban_user_convo, initialize_marzban_handlers
 from marzban_api_handler import marzban_handler
-from admin_handlers import group_actions 
 from menu import menu
 from utils import _safe_edit
 
@@ -57,9 +56,9 @@ def _handle_reload_maps(call, params):
     bot.answer_callback_query(call.id, "⏳ در حال رفرش کردن مپینگ کاربران مرزبان...")
     success = marzban_handler.reload_uuid_maps()
     if success:
-        bot.send_message(call.from_user.id, "✅ مپینگ کاربران مرزبان با موفقیت به‌روز شد.")
+        bot.send_message(call.from_user.id, "✅ مپینگ کاربران مرزبان با موفقیت به‌روز شد.", parse_mode=None)
     else:
-        bot.send_message(call.from_user.id, "❌ خطا در به‌روزرسانی مپینگ. لطفاً لاگ‌ها را بررسی کنید.")
+        bot.send_message(call.from_user.id, "❌ خطا در به‌روزرسانی مپینگ. لطفاً لاگ‌ها را بررسی کنید.", parse_mode=None)
 
 
 # ===================================================================

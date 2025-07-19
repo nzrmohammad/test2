@@ -25,8 +25,8 @@ ADMIN_UUID = os.getenv("ADMIN_UUID")
 ADMIN_IDS = _parse_admin_ids(os.getenv("ADMIN_IDS")) or {265455450}
 
 MARZBAN_API_BASE_URL = os.getenv("MARZBAN_API_BASE_URL", "https://panel2.fox1.eu.org:8000")
-MARZBAN_API_USERNAME = os.getenv("MARZBAN_API_USERNAME", "nzrmohammad")
-MARZBAN_API_PASSWORD = os.getenv("MARZBAN_API_PASSWORD", "09380045017A$d")
+MARZBAN_API_USERNAME = os.getenv("MARZBAN_API_USERNAME")
+MARZBAN_API_PASSWORD = os.getenv("MARZBAN_API_PASSWORD")
 
 # --- Paths & Time ---
 DATABASE_PATH = "bot_data.db"

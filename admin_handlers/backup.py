@@ -6,7 +6,7 @@ from telebot import types
 
 from marzban_api_handler import marzban_handler
 from menu import menu
-from utils import _safe_edit
+from utils import _safe_edit, escape_markdown
 from config import DATABASE_PATH, TELEGRAM_FILE_SIZE_LIMIT_BYTES
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,13 @@ def _handle_bot_db_backup_request(call):
     try:
         file_size = os.path.getsize(DATABASE_PATH)
         if file_size > TELEGRAM_FILE_SIZE_LIMIT_BYTES:
-            bot.send_message(chat_id, f"❌ خطا: حجم فایل دیتابیس ({file_size / (1024*1024):.2f} MB) زیاد است.")
+            bot.send_message(chat_id, f"❌ خطا: حجم فایل دیتابیس ({escape_markdown(f'{file_size / (1024*1024):.2f}')} MB) زیاد است.")
             return
         with open(DATABASE_PATH, "rb") as db_file:
             bot.send_document(chat_id, db_file, caption="✅ فایل پشتیبان دیتابیس ربات.")
     except Exception as e:
         logger.error(f"Bot DB Backup failed: {e}")
-        bot.send_message(chat_id, f"❌ خطای ناشناخته: {e}")
+        bot.send_message(chat_id, f"❌ خطای ناشناخته: {escape_markdown(e)}")
 
 def json_datetime_serializer(obj):
     if isinstance(obj, datetime):
@@ -65,4 +65,4 @@ def _handle_marzban_backup_request(call):
         os.remove(backup_filename)
     except Exception as e:
         logger.error(f"Marzban backup failed: {e}")
-        _safe_edit(chat_id, msg_id, f"❌ خطای ناشناخته: {e}", reply_markup=menu.admin_backup_selection_menu())
+        _safe_edit(chat_id, msg_id, f"❌ خطای ناشناخته: {escape_markdown(e)}", reply_markup=menu.admin_backup_selection_menu())

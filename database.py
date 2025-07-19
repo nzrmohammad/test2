@@ -44,7 +44,8 @@ class DatabaseManager:
                                     daily_reports INTEGER DEFAULT 1,
                                     expiry_warnings INTEGER DEFAULT 1,
                                     data_warning_hiddify INTEGER DEFAULT 1,
-                                    data_warning_marzban INTEGER DEFAULT 1
+                                    data_warning_marzban INTEGER DEFAULT 1,
+                                    admin_note TEXT
                                 );
                                 CREATE TABLE IF NOT EXISTS user_uuids (
                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,8 +55,8 @@ class DatabaseManager:
                                     is_active INTEGER DEFAULT 1,
                                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                     updated_at TIMESTAMP,
-                                    first_connection_time TIMESTAMP, -- ستون جدید
-                                    welcome_message_sent INTEGER DEFAULT 0, -- ستون جدید
+                                    first_connection_time TIMESTAMP,
+                                    welcome_message_sent INTEGER DEFAULT 0,
                                     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
                                 );
                                 CREATE TABLE IF NOT EXISTS usage_snapshots (
@@ -410,5 +411,10 @@ class DatabaseManager:
             with self._conn() as c:
                 rows = c.execute("SELECT payment_date FROM payments WHERE uuid_id = ? ORDER BY payment_date DESC", (uuid_id,)).fetchall()
                 return [dict(r) for r in rows]
+
+    def update_user_note(self, user_id: int, note: Optional[str]) -> None:
+        """Updates or removes the admin note for a given user."""
+        with self._conn() as c:
+            c.execute("UPDATE users SET admin_note = ? WHERE user_id = ?", (note, user_id))
 
 db = DatabaseManager()
