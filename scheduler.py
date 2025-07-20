@@ -15,6 +15,8 @@ from utils import escape_markdown, format_daily_usage
 from menu import menu
 from admin_formatters import fmt_admin_report, fmt_online_users_list
 from user_formatters import fmt_user_report
+import jdatetime
+
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class SchedulerManager:
             
             all_uuids_from_db = db.all_active_uuids()
             if not all_uuids_from_db:
+                logger.info("SCHEDULER: No active UUIDs in DB to check warnings for. JOB STOPPED.") # لاگ مهم
                 return
 
             all_users_info_map = {u['uuid']: u for u in combined_handler.get_all_users_combined()}
@@ -69,6 +72,7 @@ class SchedulerManager:
                 uuid_str = u_row['uuid']
                 uuid_id_in_db = u_row['id']
                 user_id_in_telegram = u_row['user_id']
+                logger.info(f"SCHEDULER: Checking warnings for UUID: {uuid_str} (User ID: {user_id_in_telegram})") # لاگ برای هر کاربر
                 
                 info = all_users_info_map.get(uuid_str)
                 if not info:
@@ -158,53 +162,79 @@ class SchedulerManager:
                             db.log_warning(uuid_id_in_db, warning_type)
 
     def _nightly_report(self) -> None:
-            now = datetime.now(self.tz)
-            now_str = now.strftime("%Y/%m/%d - %H:%M")
-            logger.info(f"Scheduler: Running nightly reports at {now_str}")
+            tehran_tz = pytz.timezone("Asia/Tehran")
+            now_gregorian = datetime.now(tehran_tz)
+            now_shamsi = jdatetime.datetime.fromgregorian(datetime=now_gregorian)
+            now_str = now_shamsi.strftime("%Y/%m/%d - %H:%M")
+            logger.info(f"SCHEDULER: ----- Running nightly report at {now_str} -----")
 
             all_users_info_from_api = combined_handler.get_all_users_combined()
             if not all_users_info_from_api:
-                logger.warning("Scheduler: Could not fetch user info from API for nightly report.")
+                logger.warning("SCHEDULER: Could not fetch any user info from API. JOB STOPPED.")
                 return
                 
+            logger.info(f"SCHEDULER: Fetched {len(all_users_info_from_api)} total users from API.")
+
             user_info_map = {user['uuid']: user for user in all_users_info_from_api}
             all_bot_users = db.get_all_user_ids()
-            separator = '\n' + '─' * 25 + '\n'
+            separator = '\n' + '─' * 18 + '\n'
 
             for user_id in all_bot_users:
-                user_settings = db.get_user_settings(user_id)
-                if not user_settings.get('daily_reports', True):
-                    continue
-                report_text, header = "", ""
-                user_uuids_from_db = db.uuids(user_id)
-                user_infos_for_report = []
-                if user_uuids_from_db:
-                    for u_row in user_uuids_from_db:
-                        if u_row['uuid'] in user_info_map:
-                            user_data = user_info_map[u_row['uuid']]
-                            user_data['db_id'] = u_row['id'] 
-                            user_infos_for_report.append(user_data)
-
+                logger.info(f"SCHEDULER: ----- Processing user_id: {user_id} -----")
+                
                 try:
-                    if user_id in ADMIN_IDS:
-                        header = f"👑 *گزارش جامع ادمین* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
-                        report_text = fmt_admin_report(all_users_info_from_api, db)
-                    elif user_infos_for_report:
-                        header = f"🌙 *گزارش روزانه شما* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
-                        report_text = fmt_user_report(user_infos_for_report)
-
-                    if report_text:
-                        self.bot.send_message(user_id, header + report_text, parse_mode="MarkdownV2")
-                        time.sleep(0.5)
+                    user_settings = db.get_user_settings(user_id)
+                    if not user_settings.get('daily_reports', True):
+                        logger.info(f"SCHEDULER: User {user_id} has disabled daily reports. Skipping.")
+                        continue
                     
-                    if user_infos_for_report:
-                        for info in user_infos_for_report:
-                            db.delete_daily_snapshots(info['db_id'])
-                        logger.info(f"Scheduler: Cleaned up daily snapshots for user {user_id}.")
+                    # --- Admin Report ---
+                    if user_id in ADMIN_IDS:
+                        logger.info(f"SCHEDULER: User {user_id} is an ADMIN. Generating admin report.")
+                        header = f"👑 *گزارش جامع* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
+                        report_text = fmt_admin_report(all_users_info_from_api, db)
+                        try:
+                            self.bot.send_message(user_id, header + report_text, parse_mode="MarkdownV2")
+                            logger.info(f"SCHEDULER: Admin report sent to {user_id}.")
+                        except Exception as e:
+                            logger.error(f"SCHEDULER: Failed to send ADMIN report to {user_id}: {e}", exc_info=True)
+
+                    # --- User Report (for ALL users, including admins) ---
+                    logger.info(f"SCHEDULER: Now checking for personal user report for user_id: {user_id}.")
+                    user_uuids_from_db = db.uuids(user_id)
+                    user_infos_for_report = []
+                    
+                    if not user_uuids_from_db:
+                        logger.warning(f"SCHEDULER: User {user_id} has no UUIDs registered in the bot's DB. Skipping user report.")
+                    else:
+                        logger.info(f"SCHEDULER: User {user_id} has {len(user_uuids_from_db)} UUID(s) in DB. Matching with API data...")
+                        for u_row in user_uuids_from_db:
+                            if u_row['uuid'] in user_info_map:
+                                user_data = user_info_map[u_row['uuid']]
+                                user_data['db_id'] = u_row['id'] 
+                                user_infos_for_report.append(user_data)
                         
+                        if user_infos_for_report:
+                            logger.info(f"SCHEDULER: Found {len(user_infos_for_report)} active account(s) for user {user_id}. Generating report.")
+                            header = f"🌙 *گزارش روزانه* {escape_markdown('-')} {escape_markdown(now_str)}{separator}"
+                            report_text = fmt_user_report(user_infos_for_report)
+                            try:
+                                self.bot.send_message(user_id, header + report_text, parse_mode="MarkdownV2")
+                                logger.info(f"SCHEDULER: Personal user report sent to {user_id}.")
+                            except Exception as e:
+                                logger.error(f"SCHEDULER: Failed to send USER report to {user_id}: {e}", exc_info=True)
+                        else:
+                            logger.warning(f"SCHEDULER: No active accounts found in API for user {user_id} after matching. No user report will be sent.")
+
+                    # --- Cleanup Snapshots ---
+                    if user_uuids_from_db:
+                        for info in user_uuids_from_db:
+                            db.delete_daily_snapshots(info['id'])
+                        logger.info(f"Scheduler: Cleaned up daily snapshots for user {user_id}.")
+                            
                 except Exception as e:
-                    logger.error(f"Scheduler: Failed to send nightly report or cleanup for user {user_id}: {e}")
-                    continue
+                    logger.error(f"SCHEDULER: CRITICAL FAILURE while processing main loop for user {user_id}: {e}", exc_info=True)
+                    continue # Go to the next user
 
     def _update_online_reports(self) -> None:
         logger.info("Scheduler: Running 3-hourly online user report update.")

@@ -56,7 +56,7 @@ def fmt_users_list(users: list, list_type: str, page: int) -> str:
     return "\n".join(lines)
 
 def fmt_online_users_list(users: list, page: int) -> str:
-    title = "⚡️ کاربران آنلاین (۳ دقیقه اخیر)"
+    title = "⚡️ کاربران آنلاین (۳ دقیقه اخیر)" 
 
     if not users:
         return f"*{escape_markdown(title)}*\n\nهیچ کاربری در این لحظه آنلاین نیست\\."
@@ -64,7 +64,6 @@ def fmt_online_users_list(users: list, page: int) -> str:
     header_text = f"*{escape_markdown(title)}*"
     if len(users) > PAGE_SIZE:
         total_pages = (len(users) + PAGE_SIZE - 1) // PAGE_SIZE
-        # مشکل اینجا بود: پرانتزها و | باید escape می‌شدند
         pagination_text = f"\\(صفحه {page + 1} از {total_pages} \\| کل: {len(users)}\\)"
         header_text += f"\n{pagination_text}"
 
@@ -78,13 +77,10 @@ def fmt_online_users_list(users: list, page: int) -> str:
         panel_name_raw = user.get('name', 'کاربر ناشناس')
         bot_user_info = uuid_to_bot_user.get(user.get('uuid'))
 
-        # مشکل اصلی اینجا بود: اسم کاربر داخل لینک نباید escape بشه
-        # کاراکترهای ] و [ از اسم حذف میشن تا لینک خراب نشه
         clean_name = panel_name_raw.replace('[', '').replace(']', '')
-        name_str = escape_markdown(clean_name) # اسم رو به صورت عادی escape می‌کنیم
+        name_str = escape_markdown(clean_name)
         if bot_user_info and bot_user_info.get('user_id'):
             user_id = bot_user_info['user_id']
-            # و اینجا بدون escape داخل لینک قرار می‌دیم
             name_str = f"[{clean_name}](tg://user?id={user_id})"
 
         daily_usage_output = escape_markdown(format_daily_usage(user.get('daily_usage_GB', 0)))
@@ -100,13 +96,18 @@ def fmt_online_users_list(users: list, page: int) -> str:
     body_text = "\n".join(user_lines)
     return f"{header_text}\n\n{body_text}"
 
+# file: admin_formatters.py
+
 def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
     if not all_users_from_api:
-        return "هیچ کاربری در پنل یافت نشد."
+        return "هیچ کاربری در پنل یافت نشد"
 
-    total_usage_all, active_users = 0.0, 0
+    # --- Data Calculation ---
+    active_users = 0
+    active_hiddify_users, active_marzban_users = 0, 0
     total_daily_hiddify, total_daily_marzban = 0.0, 0.0
-    online_users, expiring_soon_users, new_users_today = [], [], []
+    online_users, expiring_soon_users, new_users_today, expired_recently_users = [], [], [], []
+    hiddify_user_count, marzban_user_count = 0, 0
 
     now_utc = datetime.now(pytz.utc)
     online_deadline = now_utc - timedelta(minutes=3)
@@ -114,9 +115,18 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
     db_users_map = {u['uuid']: u.get('created_at') for u in db_manager.all_active_uuids()}
 
     for user_info in all_users_from_api:
+        breakdown = user_info.get('breakdown', {})
+        is_on_hiddify = 'hiddify' in breakdown and breakdown['hiddify']
+        is_on_marzban = 'marzban' in breakdown and breakdown['marzban']
+        if is_on_hiddify:
+            hiddify_user_count += 1
+        if is_on_marzban:
+            marzban_user_count += 1
+
         if user_info.get("is_active"):
             active_users += 1
-        total_usage_all += user_info.get("current_usage_GB", 0)
+            if is_on_hiddify: active_hiddify_users += 1
+            if is_on_marzban: active_marzban_users += 1
 
         if user_info.get('uuid'):
             daily_usage_dict = db_manager.get_usage_since_midnight_by_uuid(user_info['uuid'])
@@ -129,49 +139,70 @@ def fmt_admin_report(all_users_from_api: list, db_manager) -> str:
             user_info['daily_usage_dict'] = daily_usage_dict
             online_users.append(user_info)
 
-        if user_info.get('expire') is not None and 0 <= user_info['expire'] <= 3:
-            expiring_soon_users.append(user_info)
+        expire_days = user_info.get('expire')
+        if expire_days is not None:
+            if 0 <= expire_days <= 3:
+                expiring_soon_users.append(user_info)
+            elif -2 <= expire_days < 0:
+                expired_recently_users.append(user_info)
+
 
         created_at = db_users_map.get(user_info.get('uuid'))
         if created_at and isinstance(created_at, datetime) and (now_utc - created_at.astimezone(pytz.utc)).days < 1:
             new_users_today.append(user_info)
 
     total_daily_all = total_daily_hiddify + total_daily_marzban
-    
     list_bullet = escape_markdown("- ")
-    separator = escape_markdown(" | ")
     
+    # --- Report Formatting ---
     report_lines = [
         f"{EMOJIS['gear']} *{escape_markdown('خلاصه وضعیت کل پنل')}*",
-        f"{list_bullet}{EMOJIS['user']} تعداد کل اکانت‌ها: *{len(all_users_from_api)}*",
-        f"{list_bullet}{EMOJIS['success']} اکانت‌های فعال: *{active_users}*",
-        f"{list_bullet}{EMOJIS['wifi']} کاربران آنلاین: *{len(online_users)}*",
-        f"{list_bullet}{EMOJIS['chart']} *مجموع مصرف کل:* `{escape_markdown(f'{total_usage_all:.2f}')} GB`",
-        f"{list_bullet}{EMOJIS['lightning']} *مصرف امروز کل:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
-        f"  `- 🇩🇪 آلمان:* `{escape_markdown(format_daily_usage(total_daily_hiddify))}`", # Inside code block, '-' is fine
-        f"  `- 🇫🇷 فرانسه:* `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
+        f"{list_bullet}{EMOJIS['user']} تعداد کل اکانت‌ها : *{len(all_users_from_api)}*",
+        f"{list_bullet} 🇩🇪 : *{hiddify_user_count}* {escape_markdown('|')} 🇫🇷 : *{marzban_user_count}*",
+        f"{list_bullet}{EMOJIS['success']} اکانت‌های فعال : *{active_users}*",
+        f"{list_bullet} 🇩🇪 : *{active_hiddify_users}* {escape_markdown('|')} 🇫🇷 : *{active_marzban_users}*",
+        f"{list_bullet}{EMOJIS['wifi']} کاربران آنلاین : *{len(online_users)}*",
+        f"{list_bullet}{EMOJIS['lightning']} *مصرف کل امروز :* `{escape_markdown(format_daily_usage(total_daily_all))}`",
+        f"{list_bullet} 🇩🇪 : `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
+        f"{list_bullet} 🇫🇷 : `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
     ]
 
     if online_users:
-        report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['wifi']} {escape_markdown('کاربران آنلاین و مصرف امروزشان:')}*")
+        report_lines.append("\n" + "─" * 15 + f"\n*{EMOJIS['wifi']} {escape_markdown('کاربران آنلاین و مصرف امروزشان')}*")
         online_users.sort(key=lambda u: u.get('name', ''))
         for user in online_users:
             user_name = escape_markdown(user.get('name', 'کاربر ناشناس'))
             daily_dict = user.get('daily_usage_dict', {})
-            h_daily_str = escape_markdown(format_daily_usage(daily_dict.get('hiddify', 0.0)))
-            m_daily_str = escape_markdown(format_daily_usage(daily_dict.get('marzban', 0.0)))
-            report_lines.append(f"`•` *{user_name}:* 🇩🇪`{h_daily_str}`{separator}🇫🇷`{m_daily_str}`")
+            
+            usage_parts = []
+            breakdown = user.get('breakdown', {})
+            if 'hiddify' in breakdown and breakdown['hiddify']:
+                h_daily_str = escape_markdown(format_daily_usage(daily_dict.get('hiddify', 0.0)))
+                usage_parts.append(f"🇩🇪 `{h_daily_str}`")
+            if 'marzban' in breakdown and breakdown['marzban']:
+                m_daily_str = escape_markdown(format_daily_usage(daily_dict.get('marzban', 0.0)))
+                usage_parts.append(f"🇫🇷 `{m_daily_str}`")
+            
+            usage_str = escape_markdown(" | ").join(usage_parts)
+            report_lines.append(f"`•` *{user_name} :* {usage_str}")
 
     if expiring_soon_users:
-        report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['warning']} {escape_markdown('کاربرانی که به زودی منقضی می‌شوند (تا ۳ روز):')}*")
+        report_lines.append("\n" + "─" * 15 + f"\n*{EMOJIS['warning']} {escape_markdown('کاربرانی که تا ۳ روز آینده منقضی می شوند')}*")
         expiring_soon_users.sort(key=lambda u: u.get('expire', 99))
         for user in expiring_soon_users:
             name = escape_markdown(user['name'])
             days = user['expire']
-            report_lines.append(f"`•` *{name}:* `{days} روز باقیمانده`")
+            report_lines.append(f"`•` *{name} :* {days} روز")
+
+    if expired_recently_users:
+        report_lines.append("\n" + "─" * 15 + f"\n*{EMOJIS['error']} {escape_markdown('کاربران منقضی (۴۸ ساعت اخیر)')}*")
+        expired_recently_users.sort(key=lambda u: u.get('name', ''))
+        for user in expired_recently_users:
+            name = escape_markdown(user['name'])
+            report_lines.append(f"`•` *{name}*")
 
     if new_users_today:
-        report_lines.append("\n" + "─" * 20 + f"\n*{EMOJIS['star']} {escape_markdown('کاربران جدید (۲۴ ساعت اخیر):')}*")
+        report_lines.append("\n" + "─" * 15 + f"\n*{EMOJIS['star']} {escape_markdown('کاربران جدید (۲۴ ساعت اخیر):')}*")
         for user in new_users_today:
             name = escape_markdown(user['name'])
             report_lines.append(f"`•` *{name}*")
@@ -304,8 +335,8 @@ def fmt_marzban_system_stats(info: dict) -> str:
         f"🖥️ هسته CPU: `{cpu_cores}` `|` مصرف: `{cpu_usage}\\%`\n"
         f"💾 مصرف RAM: `{mem_used_gb} / {mem_total_gb} GB` `({mem_percent_str}\\%)`\n"
         f"`────────────────────────────`\n"
-        f"👥 کاربران کل: `{total_users}` `|` 🟢 فعال: `{active_users}` `|` 🔴 آنلاین: `{online_users}`\n"
-        f"⚪️ غیرفعال: `{disabled_users}` `|` 🗓 منقضی شده: `{expired_users}`\n"
+        f"👥 کاربران کل: `{total_users}` {escape_markdown('|')} 🟢 فعال: `{active_users}` {escape_markdown('|')} 🔴 آنلاین: `{online_users}`\n"
+        f"⚪️ غیرفعال: `{disabled_users}` {escape_markdown('|')} 🗓 منقضی شده: `{expired_users}`\n"
         f"`────────────────────────────`\n"
         f"*📈 ترافیک کل:*\n"
         f"  `↓` دانلود: `{total_dl_gb} GB`\n"

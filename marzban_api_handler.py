@@ -98,43 +98,43 @@ class MarzbanAPIHandler:
         
         return self._request("POST", "/user", json=payload)
 
-def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
-    # به جای requests.get از self._request استفاده می‌کنیم
-    current_data = self._request("GET", f"/user/{username}")
-    
-    # اگر کاربر یافت نشد یا خطایی رخ داد، عملیات را متوقف کن
-    if not current_data:
-        logger.error(f"Marzban: Failed to get current data for user '{username}' before modification.")
-        return False
-
-    # بقیه کد شما کاملاً درست است و بدون تغییر باقی می‌ماند
-    try:
-        payload = data.copy() if data else {}
-
-        if add_usage_gb != 0:
-            current_limit = current_data.get('data_limit', 0)
-            payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
-
-        if add_days != 0:
-            current_expire_ts = current_data.get('expire', 0)
-            base_time = datetime.fromtimestamp(current_expire_ts) if current_expire_ts > 0 else datetime.now()
-            if base_time < datetime.now():
-                base_time = datetime.now()
-            new_expire_dt = base_time + timedelta(days=add_days)
-            payload['expire'] = int(new_expire_dt.timestamp())
-
-        if not payload:
-            return True
-
-        # برای درخواست PUT نیز از self._request استفاده می‌کنیم تا کد یکپارچه باشد
-        # (گرچه کد قبلی شما برای این بخش هم کار می‌کرد، اما این روش تمیزتر است)
-        response = self._request("PUT", f"/user/{username}", json=payload)
+    def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
+        # به جای requests.get از self._request استفاده می‌کنیم
+        current_data = self._request("GET", f"/user/{username}")
         
-        # self._request در صورت موفقیت True برمی‌گرداند یا JSON، پس باید بررسی کنیم None نباشد
-        return response is not None
+        # اگر کاربر یافت نشد یا خطایی رخ داد، عملیات را متوقف کن
+        if not current_data:
+            logger.error(f"Marzban: Failed to get current data for user '{username}' before modification.")
+            return False
 
-    except Exception as e:
-        logger.error(f"Marzban: Failed to process payload for modifying user '{username}': {e}")
+        # بقیه کد شما کاملاً درست است و بدون تغییر باقی می‌ماند
+        try:
+            payload = data.copy() if data else {}
+
+            if add_usage_gb != 0:
+                current_limit = current_data.get('data_limit', 0)
+                payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
+
+            if add_days != 0:
+                current_expire_ts = current_data.get('expire', 0)
+                base_time = datetime.fromtimestamp(current_expire_ts) if current_expire_ts > 0 else datetime.now()
+                if base_time < datetime.now():
+                    base_time = datetime.now()
+                new_expire_dt = base_time + timedelta(days=add_days)
+                payload['expire'] = int(new_expire_dt.timestamp())
+
+            if not payload:
+                return True
+
+            # برای درخواست PUT نیز از self._request استفاده می‌کنیم تا کد یکپارچه باشد
+            # (گرچه کد قبلی شما برای این بخش هم کار می‌کرد، اما این روش تمیزتر است)
+            response = self._request("PUT", f"/user/{username}", json=payload)
+            
+            # self._request در صورت موفقیت True برمی‌گرداند یا JSON، پس باید بررسی کنیم None نباشد
+            return response is not None
+
+        except Exception as e:
+            logger.error(f"Marzban: Failed to process payload for modifying user '{username}': {e}")
         return False
         
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:

@@ -1,4 +1,4 @@
-import pytz
+import logging
 from config import EMOJIS, PAGE_SIZE
 from database import db
 import combined_handler
@@ -8,6 +8,8 @@ from utils import (
     format_daily_usage, escape_markdown,
     load_service_plans, format_raw_datetime, format_shamsi_tehran, gregorian_to_shamsi_str, days_until_next_birthday
 )
+
+logger = logging.getLogger(__name__)
 
 def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     if not info: return "❌ خطا در دریافت اطلاعات"
@@ -162,56 +164,60 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
 
     return "\n".join(report), menu_data
 
-
 def fmt_user_report(user_infos: list) -> str:
+    logger.info(f"USER_FORMATTER: fmt_user_report called to format a report for {len(user_infos)} account(s).")
     if not user_infos:
-        return "شما اکانت فعالی برای گزارش‌گیری ندارید."
-    
-    total_daily_hiddify, total_daily_marzban = 0.0, 0.0
-    accounts_details = []
-    
+        logger.warning("USER_FORMATTER: No active accounts found for user to generate a report.")
+        return ""
+
+    accounts_reports = []
+    total_daily_usage_all_accounts = 0.0
+
     for info in user_infos:
-        daily_usage_dict = db.get_usage_since_midnight(info['db_id'])
-        h_daily = daily_usage_dict.get('hiddify', 0.0)
-        m_daily = daily_usage_dict.get('marzban', 0.0)
-        
-        total_daily_hiddify += h_daily
-        total_daily_marzban += m_daily
-        
         name = escape_markdown(info.get("name", "کاربر ناشناس"))
-        usage_str = f"`{escape_markdown(f'{info.get("current_usage_GB", 0):.2f}')} GB / {escape_markdown(f'{info.get("usage_limit_GB", 0):.2f}')} GB`"
+        account_lines = [f"👤 *اکانت : {name}*"]
         
+        daily_usage_dict = db.get_usage_since_midnight(info['db_id'])
+        total_daily_usage_all_accounts += sum(daily_usage_dict.values())
+        
+        h_info = info.get('breakdown', {}).get('hiddify', {})
+        m_info = info.get('breakdown', {}).get('marzban', {})
+
+        # Display combined stats only if user is on both panels
+        if h_info and m_info:
+            account_lines.append(f"      📊 حجم‌کل : {escape_markdown(f'{info.get("usage_limit_GB", 0):.2f} GB')}")
+            account_lines.append(f"      🔥 حجم‌مصرف شده : {escape_markdown(f'{info.get("current_usage_GB", 0):.2f} GB')}")
+            account_lines.append(f"      📥 حجم‌باقی‌مانده : {escape_markdown(f'{info.get("remaining_GB", 0):.2f} GB')}")
+        # Display individual stats if user is on one panel
+        else:
+            panel_info = h_info or m_info
+            account_lines.append(f"      📊 حجم‌کل : {escape_markdown(f'{panel_info.get("usage_limit_GB", 0):.2f} GB')}")
+            account_lines.append(f"      🔥 حجم‌مصرف‌شده : {escape_markdown(f'{panel_info.get("current_usage_GB", 0):.2f} GB')}")
+            account_lines.append(f"      📥 حجم‌باقی‌مانده : {escape_markdown(f'{max(0, panel_info.get("usage_limit_GB", 0) - panel_info.get("current_usage_GB", 0)):.2f} GB')}")
+
+        if h_info:
+            account_lines.append(f" 🇩🇪 : {escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))}")
+        if m_info:
+            account_lines.append(f" 🇫🇷 : {escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))}")
+
         expire_days = info.get("expire")
         expire_str = "`نامحدود`"
         if expire_days is not None:
-            expire_str = f"`{expire_days} روز`" if expire_days >= 0 else "`منقضی شده`"
-        
-        daily_breakdown = []
-        if 'hiddify' in info.get('breakdown', {}):
-            daily_breakdown.append(f"`  `🇩🇪 *مصرف امروز آلمان:* `{escape_markdown(format_daily_usage(h_daily))}`")
-        if 'marzban' in info.get('breakdown', {}):
-            daily_breakdown.append(f"`  `🇫🇷 *مصرف امروز فرانسه:* `{escape_markdown(format_daily_usage(m_daily))}`")
-            
-        accounts_details.append(
-            f"{EMOJIS['user']} *اکانت: {name}*\n"
-            f"`  `{EMOJIS['chart']} *مصرف کل:* {usage_str}\n"
-            + "\n".join(daily_breakdown) +
-            f"\n`  `{EMOJIS['calendar']} *انقضا:* {expire_str}"
-        )
+            expire_str = f"{expire_days} روز" if expire_days >= 0 else "منقضی شده"
+        account_lines.append(f"      📅 انقضا : {expire_str}")
+        accounts_reports.append("\n".join(account_lines))
+    final_report = "\n\n".join(accounts_reports)
 
-    if not accounts_details:
-        return "اطلاعات هیچ یک از اکانت‌های شما دریافت نشد"
-    
-    report_body = "\n\n".join(accounts_details)
-    total_daily_all = total_daily_hiddify + total_daily_marzban
-    
-    footer = [
-        f"\n{EMOJIS['lightning']} *مجموع کل مصرف امروز شما:* `{escape_markdown(format_daily_usage(total_daily_all))}`",
-        f"`  `🇩🇪 مجموع آلمان: `{escape_markdown(format_daily_usage(total_daily_hiddify))}`",
-        f"`  `🇫🇷 مجموع فرانسه: `{escape_markdown(format_daily_usage(total_daily_marzban))}`"
-    ]
-    
-    return f"{report_body}\n\n" + "\n".join(footer)
+    footer_text = ""
+    if len(user_infos) > 1:
+        footer_text = f"⚡️ *مجموع مصرف امروز اکانت ها : * {escape_markdown(format_daily_usage(total_daily_usage_all_accounts))}"
+    else:
+        footer_text = f"⚡️ *مجموع کل مصرف امروز : * {escape_markdown(format_daily_usage(total_daily_usage_all_accounts))}"
+
+    if footer_text:
+        final_report += f"\n\n {footer_text}"
+
+    return final_report
 
 def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
     if not plans_to_show:

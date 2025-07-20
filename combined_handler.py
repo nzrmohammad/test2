@@ -138,17 +138,22 @@ def delete_user_from_all_panels(identifier: str) -> bool:
     return h_success and m_success
 
 def get_all_users_combined() -> List[Dict[str, Any]]:
+    logger.info("COMBINED_HANDLER: Starting to fetch users from all panels.") # لاگ شروع
     all_users_map = {}
     
     # FIX: Handle None return from API handlers to prevent crashes
     h_users = hiddify_handler.get_all_users() or []
+    logger.info("COMBINED_HANDLER: Fetching from Hiddify...") # لاگ هیدیفای
+    logger.info(f"COMBINED_HANDLER: Fetched {len(h_users)} users from Hiddify.") # لاگ تعداد
     for user in h_users:
         uuid = user['uuid']
         user['breakdown'] = {'hiddify': user.copy()}
         all_users_map[uuid] = user
 
     # FIX: Handle None return from API handlers
+    logger.info("COMBINED_HANDLER: Fetching from Marzban...") # لاگ مرزبان
     m_users = marzban_handler.get_all_users() or []
+    logger.info(f"COMBINED_HANDLER: Fetched {len(m_users)} users from Marzban.") # لاگ تعداد
     for user in m_users:
         uuid = user.get('uuid')
         if uuid and uuid in all_users_map:
