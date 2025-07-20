@@ -49,11 +49,11 @@ def handle_ask_action_value(call, params):
         plan_or_filter_name = f"پلن «{escape_markdown(selected_plan.get('name', ''))}»"
 
     else: # Should not happen
-        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات زمینه یافت نشد.")
+        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات زمینه یافت نشد\\.")
         return
 
     if not target_users:
-        prompt = f"❌ هیچ کاربری منطبق با {plan_or_filter_name} یافت نشد."
+        prompt = f"❌ هیچ کاربری منطبق با {plan_or_filter_name} یافت نشد\\."
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_panel())
         return
 
@@ -71,7 +71,7 @@ def handle_ask_action_value(call, params):
     }
     value_type_str = escape_markdown(prompt_map.get(action_type, "مقدار"))
 
-    prompt = (f"شما *{plan_or_filter_name}* را انتخاب کردید (شامل *{user_count}* کاربر).\n\n"
+    prompt = (f"شما *{plan_or_filter_name}* را انتخاب کردید (شامل *{user_count}* کاربر)\\.\n\n"
               f"حالا لطفاً مقدار *{value_type_str}* که می‌خواهید به این کاربران اضافه شود را وارد کنید:")
     
     # Unified cancel button
@@ -91,16 +91,16 @@ def _apply_group_action(message: types.Message):
 
     if not all([msg_id, action_type, target_users]):
         logger.error(f"Incomplete conversation data for user {uid} in _apply_group_action.")
-        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات عملیات ناقص است.", reply_markup=menu.admin_panel())
+        _safe_edit(uid, msg_id, "❌ خطای داخلی: اطلاعات عملیات ناقص است\\.", reply_markup=menu.admin_panel())
         return
 
     try:
         value = float(text)
     except ValueError:
-        _safe_edit(uid, msg_id, "❌ مقدار وارد شده نامعتبر است. لطفاً یک عدد وارد کنید.", reply_markup=menu.admin_panel())
+        _safe_edit(uid, msg_id, "❌ مقدار وارد شده نامعتبر است. لطفاً یک عدد وارد کنید\\.", reply_markup=menu.admin_panel())
         return
 
-    _safe_edit(uid, msg_id, f"⏳ در حال اجرای دستور روی *{len(target_users)}* کاربر...")
+    _safe_edit(uid, msg_id, f"⏳ در حال اجرای دستور روی *{len(target_users)}* کاربر\\.\\.\\.")
 
     add_gb = value if action_type == 'add_gb' else 0
     add_days = int(value) if action_type == 'add_days' else 0
@@ -126,7 +126,7 @@ def handle_select_action_type(call, params):
     selected_plan = all_plans[plan_index]
     plan_name_escaped = escape_markdown(selected_plan.get('name', ''))
 
-    prompt = f"شما پلن *{plan_name_escaped}* را انتخاب کردید.\n\nلطفاً نوع دستور مورد نظر را انتخاب کنید:"
+    prompt = f"شما پلن *{plan_name_escaped}* را انتخاب کردید\\.\n\nلطفاً نوع دستور مورد نظر را انتخاب کنید:"
     _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_select_action_type_menu(plan_index, 'plan'))
 
 
@@ -141,7 +141,7 @@ def handle_select_action_for_filter(call, params):
     filter_type = params[0]
     uid, msg_id = call.from_user.id, call.message.message_id
 
-    _safe_edit(uid, msg_id, "⏳ در حال فیلتر کردن کاربران، لطفاً صبر کنید...")
+    _safe_edit(uid, msg_id, "⏳ در حال فیلتر کردن کاربران، لطفاً صبر کنید\\.\\.\\.")
 
     all_users = combined_handler.get_all_users_combined()
     target_users = []
@@ -160,7 +160,7 @@ def handle_select_action_for_filter(call, params):
                 target_users.append(user)
     
     if not target_users:
-        prompt = "❌ هیچ کاربری با این فیلتر یافت نشد."
+        prompt = "❌ هیچ کاربری با این فیلتر یافت نشد\\."
         _safe_edit(uid, msg_id, prompt, reply_markup=menu.admin_advanced_group_action_filter_menu())
         return
 
@@ -173,7 +173,7 @@ def handle_select_action_for_filter(call, params):
 
     user_count = len(target_users)
     filter_display_name = escape_markdown(filter_type.replace('_', ' '))
-    prompt = (f"✅ *{user_count}* کاربر با فیلتر «{filter_display_name}» یافت شد.\n\n"
+    prompt = (f"✅ *{user_count}* کاربر با فیلتر «{filter_display_name}» یافت شد\\.\n\n"
               f"حالا لطفاً دستوری که می‌خواهید روی این کاربران اجرا شود را انتخاب کنید:")
     
     kb = menu.admin_select_action_type_menu(filter_type, 'filter')

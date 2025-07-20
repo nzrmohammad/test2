@@ -32,16 +32,22 @@ def handle_panel_specific_reports_menu(call, params):
     panel_name = "آلمان 🇩🇪" if panel == "hiddify" else "فرانسه 🇫🇷"
     _safe_edit(call.from_user.id, call.message.message_id, f"📜 *گزارش‌های پنل {panel_name}*", reply_markup=menu.admin_panel_specific_reports_menu(panel))
 
-def handle_analytics_menu(call, params):
-    panel = params[0]
-    panel_name = "آلمان 🇩🇪" if panel == "hiddify" else "فرانسه 🇫🇷"
-    _safe_edit(call.from_user.id, call.message.message_id, f"📊 *تحلیل و آمار پنل {panel_name}*", reply_markup=menu.admin_analytics_menu(panel))
+def handle_marzban_system_stats(call, params):
+    bot.answer_callback_query(call.id, "در حال دریافت آمار سیستم مرزبان...")
+    stats = marzban_handler.get_system_stats()
+    text = fmt_marzban_system_stats(stats) if stats else escape_markdown("❌ اطلاعاتی دریافت نشد\\.")
+    
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("🔄 رفرش مپینگ کاربران", callback_data="admin:reload_maps"))
+    kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:system_status_menu"))
+    
+    _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def handle_health_check(call, params):
     bot.answer_callback_query(call.id, "در حال دریافت اطلاعات پنل...")
     info = hiddify_handler.get_panel_info()
     text = fmt_hiddify_panel_info(info) if info else escape_markdown("❌ اطلاعاتی دریافت نشد.")
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:analytics_menu:hiddify"))
+    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin:system_status_menu"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def handle_marzban_system_stats(call, params):

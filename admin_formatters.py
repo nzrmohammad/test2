@@ -276,45 +276,43 @@ def fmt_marzban_system_stats(info: dict) -> str:
         return escape_markdown("اطلاعاتی از سیستم دریافت نشد.")
 
     to_gb = lambda b: b / (1024**3)
-    separator = escape_markdown(" | ")
-
+    
+    # تغيير: تمام متغیرها قبل از استفاده escape شدند
     version = escape_markdown(info.get('version', 'N/A'))
-    mem_total_gb = to_gb(info.get('mem_total', 0))
-    mem_used_gb = to_gb(info.get('mem_used', 0))
-    mem_percent = (mem_used_gb / mem_total_gb * 100) if mem_total_gb > 0 else 0
-    cpu_cores = info.get('cpu_cores', 'N/A')
-    cpu_usage = info.get('cpu_usage', 0.0)
+    mem_total_gb = escape_markdown(f"{to_gb(info.get('mem_total', 0)):.2f}")
+    mem_used_gb = escape_markdown(f"{to_gb(info.get('mem_used', 0)):.2f}")
+    mem_percent = (info.get('mem_used', 0) / info.get('mem_total', 1) * 100)
+    mem_percent_str = escape_markdown(f"{mem_percent:.1f}")
+    cpu_cores = escape_markdown(info.get('cpu_cores', 'N/A'))
+    cpu_usage = escape_markdown(f"{info.get('cpu_usage', 0.0):.1f}")
 
-    total_users = info.get('total_user', 0)
-    online_users = info.get('online_users', 0)
-    active_users = info.get('users_active', 0)
-    disabled_users = info.get('users_disabled', 0)
-    expired_users = info.get('users_expired', 0)
+    total_users = escape_markdown(info.get('total_user', 0))
+    online_users = escape_markdown(info.get('online_users', 0))
+    active_users = escape_markdown(info.get('users_active', 0))
+    disabled_users = escape_markdown(info.get('users_disabled', 0))
+    expired_users = escape_markdown(info.get('users_expired', 0))
 
-    total_dl_gb = to_gb(info.get('incoming_bandwidth', 0))
-    total_ul_gb = to_gb(info.get('outgoing_bandwidth', 0))
-    speed_dl_mbps = info.get('incoming_bandwidth_speed', 0) / (1024 * 1024)
-    speed_ul_mbps = info.get('outgoing_bandwidth_speed', 0) / (1024 * 1024)
+    total_dl_gb = escape_markdown(f"{to_gb(info.get('incoming_bandwidth', 0)):.2f}")
+    total_ul_gb = escape_markdown(f"{to_gb(info.get('outgoing_bandwidth', 0)):.2f}")
+    speed_dl_mbps = escape_markdown(f"{info.get('incoming_bandwidth_speed', 0) / (1024 * 1024):.2f}")
+    speed_ul_mbps = escape_markdown(f"{info.get('outgoing_bandwidth_speed', 0) / (1024 * 1024):.2f}")
 
     report = (
-        f"*📊 وضعیت سیستم پنل مرزبان (فرانسه 🇫🇷)*\n"
-        f"`----------------------------`\n"
+        f"*📊 وضعیت سیستم پنل مرزبان \\(فرانسه 🇫🇷\\)*\n"
+        f"`────────────────────────────`\n"
         f"⚙️ نسخه: `{version}`\n"
-        f"🖥️ هسته CPU: `{cpu_cores}`{separator}مصرف: `{cpu_usage:.1f}\\%`\n"
-        f"💾 مصرف RAM: `{mem_used_gb:.2f} / {mem_total_gb:.2f} GB` (`{mem_percent:.1f}\\%`)\n"
-        f"`----------------------------`\n"
-        f"👥 کاربران کل: `{total_users}`\n"
-        f"🟢 فعال: `{active_users}`\n"
-        f"🔴 آنلاین: `{online_users}`\n"
-        f"⚪️ غیرفعال: `{disabled_users}`\n"
-        f"🗓 منقضی شده: `{expired_users}`\n"
-        f"`----------------------------`\n"
+        f"🖥️ هسته CPU: `{cpu_cores}` `|` مصرف: `{cpu_usage}\\%`\n"
+        f"💾 مصرف RAM: `{mem_used_gb} / {mem_total_gb} GB` `({mem_percent_str}\\%)`\n"
+        f"`────────────────────────────`\n"
+        f"👥 کاربران کل: `{total_users}` `|` 🟢 فعال: `{active_users}` `|` 🔴 آنلاین: `{online_users}`\n"
+        f"⚪️ غیرفعال: `{disabled_users}` `|` 🗓 منقضی شده: `{expired_users}`\n"
+        f"`────────────────────────────`\n"
         f"*📈 ترافیک کل:*\n"
-        f"  ↓ دانلود: `{total_dl_gb:.2f} GB`\n"
-        f"  ↑ آپلود: `{total_ul_gb:.2f} GB`\n"
+        f"  `↓` دانلود: `{total_dl_gb} GB`\n"
+        f"  `↑` آپلود: `{total_ul_gb} GB`\n"
         f"*🚀 سرعت لحظه‌ای:*\n"
-        f"  ↓ دانلود: `{speed_dl_mbps:.2f} MB/s`\n"
-        f"  ↑ آپلود: `{speed_ul_mbps:.2f} MB/s`"
+        f"  `↓` دانلود: `{speed_dl_mbps} MB/s`\n"
+        f"  `↑` آپلود: `{speed_ul_mbps} MB/s`"
     )
 
     return report

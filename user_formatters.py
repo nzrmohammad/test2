@@ -16,25 +16,10 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     status_emoji = "🟢" if info.get("is_active") else "🔴"
     status_text = "فعال" if info.get("is_active") else "غیرفعال"
     
-    name_line = f"{EMOJIS['user']} *نام :* {name} \\({status_emoji} {status_text}\\)"
-
-    total_limit_gb = escape_markdown(f"{info.get('usage_limit_GB', 0):.2f}")
-    total_usage_gb = escape_markdown(f"{info.get('current_usage_GB', 0):.2f}")
-    total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f}")
-    total_daily_gb_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
+    name_line = f"👤 *نام :* {name} \\({status_emoji} {status_text}\\)"
 
     h_info = info.get('breakdown', {}).get('hiddify', {})
     m_info = info.get('breakdown', {}).get('marzban', {})
-
-    h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f}")
-    h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f}")
-    h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
-    h_last_online = escape_markdown(format_shamsi_tehran(h_info.get('last_online')))
-    
-    m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f}")
-    m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f}")
-    m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
-    m_last_online = escape_markdown(format_shamsi_tehran(m_info.get('last_online')))
 
     expire_days = info.get("expire")
     expire_label = "نامحدود"
@@ -45,32 +30,62 @@ def fmt_one(info: dict, daily_usage_dict: dict) -> str:
     usage_percentage = info.get("usage_percentage", 0)
     bar = create_progress_bar(usage_percentage) 
 
-    report = f"""{name_line}
+    report = [name_line]
 
-{EMOJIS['database']} *مجموع حجم :* `{total_limit_gb} GB`
-{EMOJIS['fire']} *مجموع مصرف شده :* `{total_usage_gb} GB`
-{EMOJIS['download']} *مجموع باقیمانده:* `{total_remaining_gb} GB`
-{EMOJIS['lightning']} *مجموع مصرف امروز:* `{total_daily_gb_str}`
+    # نمایش اطلاعات مجموع فقط اگر کاربر در هر دو پنل باشد
+    if h_info and m_info:
+        total_limit_gb = escape_markdown(f"{info.get('usage_limit_GB', 0):.2f} GB")
+        total_usage_gb = escape_markdown(f"{info.get('current_usage_GB', 0):.2f} GB")
+        total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f} GB")
+        total_daily_gb_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
+        report.extend([
+            "",
+            f"📦 *مجموع حجم :* `{total_limit_gb}`",
+            f"🔥 *مجموع مصرف شده :* `{total_usage_gb}`",
+            f"📥 *مجموع باقیمانده:* `{total_remaining_gb}`",
+            f"⚡️ *مجموع مصرف امروز:* `{total_daily_gb_str}`" # این خط حالا شرطی است
+        ])
 
-*جزئیات سرورها*
+    # نمایش جزئیات سرورها
+    if h_info or m_info:
+        report.append("\n*جزئیات سرورها*")
+    if h_info:
+        h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f} GB")
+        h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f} GB")
+        h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
+        h_last_online = escape_markdown(format_shamsi_tehran(h_info.get('last_online')))
+        report.extend([
+            "",
+            "آلمان 🇩🇪",
+            f"🗂️ *مجموع حجم :* `{h_limit_str}`",
+            f"🔥 *مجموع مصرف شده :* `{h_usage_str}`",
+            f"⚡️ *مصرف امروز :* `{h_daily_str}`",
+            f"⏰ *آخرین اتصال :* `{h_last_online}`"
+        ])
+    if m_info:
+        m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f} GB")
+        m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f} GB")
+        m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
+        m_last_online = escape_markdown(format_shamsi_tehran(m_info.get('last_online')))
+        report.extend([
+            "",
+            "فرانسه 🇫🇷",
+            f"🗂️ *مجموع حجم :* `{m_limit_str}`",
+            f"🔥 *مجموع مصرف شده :* `{m_usage_str}`",
+            f"⚡️ *مصرف امروز :* `{m_daily_str}`",
+            f"⏰ *آخرین اتصال :* `{m_last_online}`"
+        ])
 
-*آلمان* 🇩🇪
-{EMOJIS['database']} مجموع حجم : `{h_limit_str} GB`
-{EMOJIS['fire']} مجموع مصرف شده : `{h_usage_str} GB`
-{EMOJIS['lightning']} مصرف امروز : `{h_daily_str}`
-{EMOJIS['time']} آخرین اتصال : `{h_last_online}`
+    report.extend([
+        "",
+        f"📅 *انقضا:* `{escaped_expire_label}`",
+        f"🔑 *شناسه یکتا:* `{uuid}`",
+        "",
+        f"*وضعیت :* {bar}"
+    ])
+    
+    return "\n".join(report)
 
-*فرانسه* 🇫🇷
-{EMOJIS['database']} مجموع حجم : `{m_limit_str} GB`
-{EMOJIS['fire']} مجموع مصرف شده : `{m_usage_str} GB`
-{EMOJIS['lightning']} مصرف امروز : `{m_daily_str}`
-{EMOJIS['time']} آخرین اتصال : `{m_last_online}`
-
-{EMOJIS['calendar']} *انقضا:* `{escaped_expire_label}`
-{EMOJIS['key']} *شناسه یکتا:* `{uuid}`
-
-*وضعیت :* {bar}"""
-    return report
 
 def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     num_uuids = len(uuid_rows)
@@ -85,56 +100,68 @@ def quick_stats(uuid_rows: list, page: int = 0) -> tuple[str, dict]:
     
     if not info: return f"❌ خطا در دریافت اطلاعات برای اکانت در صفحه {current_page + 1}", menu_data
 
-    raw_name = info.get("name", "کاربر ناشناس")
-    title_content = f"آمار اکانت {current_page + 1} از {num_uuids} ({raw_name})"
-    escaped_title = escape_markdown(title_content)
-
-    daily_usage_dict = db.get_usage_since_midnight(target_row['id'])
+    # --- Data Preparation ---
+    name = escape_markdown(info.get("name", "کاربر ناشناس"))
+    status_emoji = "🟢" if info.get("is_active") else "🔴"
+    status_text = "فعال" if info.get("is_active") else "غیرفعال"
     
+    name_line = f"👤 *نام :* {name} \\({status_emoji} {status_text}\\)"
+
     h_info = info.get('breakdown', {}).get('hiddify', {})
     m_info = info.get('breakdown', {}).get('marzban', {})
+    daily_usage_dict = db.get_usage_since_midnight(target_row['id'])
 
-    limit_h_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f}")
-    limit_m_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f}")
-    limit_total_str = escape_markdown(f"{info.get('usage_limit_GB', 0.0):.2f}")
-    
-    usage_h_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f}")
-    usage_m_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f}")
-    usage_total_str = escape_markdown(f"{info.get('current_usage_GB', 0.0):.2f}")
-    
-    remaining_h = max(0, h_info.get('usage_limit_GB', 0.0) - h_info.get('current_usage_GB', 0.0))
-    remaining_m = max(0, m_info.get('usage_limit_GB', 0.0) - m_info.get('current_usage_GB', 0.0))
-    remaining_h_str = escape_markdown(f"{remaining_h:.2f}")
-    remaining_m_str = escape_markdown(f"{remaining_m:.2f}")
-    remaining_total_str = escape_markdown(f"{info.get('remaining_GB', 0.0):.2f}")
-    
-    daily_h_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
-    daily_m_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
-    daily_total_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
+    # --- Report Generation ---
+    report = [name_line]
 
-    report = f"""*{escaped_title}*
+    # Display combined stats only if the user is in both panels
+    if h_info and m_info:
+        total_limit_gb = escape_markdown(f"{info.get('usage_limit_GB', 0):.2f} GB")
+        total_usage_gb = escape_markdown(f"{info.get('current_usage_GB', 0):.2f} GB")
+        total_remaining_gb = escape_markdown(f"{info.get('remaining_GB', 0):.2f} GB")
+        total_daily_gb_str = escape_markdown(format_daily_usage(sum(daily_usage_dict.values())))
+        report.extend([
+            "",
+            f"📦 *مجموع حجم :* `{total_limit_gb}`",
+            f"🔥 *مجموع مصرف شده :* `{total_usage_gb}`",
+            f"📥 *مجموع باقیمانده:* `{total_remaining_gb}`",
+            f"⚡️ *مجموع مصرف امروز:* `{total_daily_gb_str}`"
+        ])
 
-*{EMOJIS['database']} حجم کل*
-`آلمان` 🇩🇪 : `{limit_h_str} GB`
-`فرانسه` 🇫🇷: `{limit_m_str} GB`
-*مجموع :* `{limit_total_str} GB`
+    # Display server details
+    if h_info or m_info:
+        report.append("\n*جزئیات سرورها*")
+        
+    if h_info:
+        h_limit_str = escape_markdown(f"{h_info.get('usage_limit_GB', 0.0):.2f} GB")
+        h_usage_str = escape_markdown(f"{h_info.get('current_usage_GB', 0.0):.2f} GB")
+        h_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('hiddify', 0.0)))
+        h_last_online = escape_markdown(format_shamsi_tehran(h_info.get('last_online')))
+        report.extend([
+            "",
+            "آلمان 🇩🇪",
+            f"🗂️ *مجموع حجم :* `{h_limit_str}`",
+            f"🔥 *مجموع مصرف شده :* `{h_usage_str}`",
+            f"⚡️ *مصرف امروز :* `{h_daily_str}`",
+            f"⏰ *آخرین اتصال :* `{h_last_online}`"
+        ])
+        
+    if m_info:
+        m_limit_str = escape_markdown(f"{m_info.get('usage_limit_GB', 0.0):.2f} GB")
+        m_usage_str = escape_markdown(f"{m_info.get('current_usage_GB', 0.0):.2f} GB")
+        m_daily_str = escape_markdown(format_daily_usage(daily_usage_dict.get('marzban', 0.0)))
+        m_last_online = escape_markdown(format_shamsi_tehran(m_info.get('last_online')))
+        report.extend([
+            "",
+            "فرانسه 🇫🇷",
+            f"🗂️ *مجموع حجم :* `{m_limit_str}`",
+            f"🔥 *مجموع مصرف شده :* `{m_usage_str}`",
+            f"⚡️ *مصرف امروز :* `{m_daily_str}`",
+            f"⏰ *آخرین اتصال :* `{m_last_online}`"
+        ])
 
-*{EMOJIS['fire']} مجموع مصرف*
-`آلمان` 🇩🇪 : `{usage_h_str} GB`
-`فرانسه` 🇫🇷: `{usage_m_str} GB`
-*مجموع :* `{usage_total_str} GB`
+    return "\n".join(report), menu_data
 
-*{EMOJIS['download']} مجموع باقیمانده*
-`آلمان` 🇩🇪 : `{remaining_h_str} GB`
-`فرانسه` 🇫🇷: `{remaining_m_str} GB`
-*مجموع :* `{remaining_total_str} GB`
-
-*{EMOJIS['lightning']} مصرف امروز*
-`آلمان` 🇩🇪 : `{daily_h_str}`
-`فرانسه` 🇫🇷: `{daily_m_str}`
-*مجموع :* `{daily_total_str}`"""
-    
-    return report, menu_data
 
 def fmt_user_report(user_infos: list) -> str:
     if not user_infos:
@@ -190,7 +217,12 @@ def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
     if not plans_to_show:
         return "در حال حاضر پلن فعالی برای نمایش در این دسته وجود ندارد"
     
-    type_title = "ترکیبی" if plan_type == "combined" else "آلمان"
+    type_map = {
+        "combined": "ترکیبی",
+        "germany": "آلمان",
+        "france": "فرانسه"
+    }
+    type_title = type_map.get(plan_type, "عمومی")
     
     title_content = f"{EMOJIS['rocket']} پلن‌های فروش سرویس ({type_title})"
     title_text = f"*{escape_markdown(title_content)}*"
@@ -202,10 +234,18 @@ def fmt_service_plans(plans_to_show: list, plan_type: str) -> str:
         
         if plan.get('total_volume'):
             lines.append(f"حجم کل: *{escape_markdown(plan['total_volume'])}*")
-        if plan.get('volume_de'):
-            lines.append(f"آلمان: *{escape_markdown(plan['volume_de'])}*")
-        if plan.get('volume_fr'):
-            lines.append(f"فرانسه: *{escape_markdown(plan['volume_fr'])}*")
+        
+        # تغيير: نمایش شرطی حجم بر اساس نوع پلن
+        # حالا به درستی لیبل و مقدار مربوط به هر کشور را نمایش می‌دهد
+        if plan_type == 'germany' and plan.get('volume_de'):
+             lines.append(f"حجم: *{escape_markdown(plan['volume_de'])}*")
+        elif plan_type == 'france' and plan.get('volume_fr'):
+            lines.append(f"حجم: *{escape_markdown(plan['volume_fr'])}*")
+        elif plan_type == 'combined':
+            if plan.get('volume_de'):
+                lines.append(f"آلمان: *{escape_markdown(plan['volume_de'])}*")
+            if plan.get('volume_fr'):
+                lines.append(f"فرانسه: *{escape_markdown(plan['volume_fr'])}*")
             
         lines.append(f"مدت زمان: *{escape_markdown(plan['duration'])}*")
                 
@@ -229,28 +269,34 @@ def fmt_panel_quick_stats(panel_name: str, stats: dict) -> str:
         usage_str = format_daily_usage(usage_gb)
         lines.append(f"`• {hours}` ساعت گذشته: `{escape_markdown(usage_str)}`")
         
-    lines.append(escape_markdown("\n*نکته:* این آمار تجمعی است. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد"))
+    lines.append("\n*نکته:* این آمار تجمعی است\\. برای مثال، مصرف ۶ ساعت گذشته شامل مصرف ۳ ساعت اخیر نیز می‌باشد\\.")
         
     return "\n".join(lines)
 
 def fmt_user_payment_history(payments: list, user_name: str, page: int) -> str:
-    title = f"💳 *سابقه پرداخت‌های اکانت {escape_markdown(user_name)}*"
+    escaped_user_name = escape_markdown(user_name)
+    
+    total_payments = len(payments)
+    title_action = "خرید" if total_payments == 1 else "پرداخت‌های"
+    title = f"💳 *سابقه {title_action} اکانت {escaped_user_name}*"
     
     if not payments:
-        return f"{title}\n\nهیچ سابقه پرداختی برای این اکانت ثبت نشده است"
+        return f"*{escape_markdown(f'سابقه پرداخت‌های اکانت {user_name}')}*\n\nهیچ سابقه پرداختی برای این اکانت ثبت نشده است"
 
     header_text = title
-    if len(payments) > PAGE_SIZE:
-        total_pages = (len(payments) + PAGE_SIZE - 1) // PAGE_SIZE
+    if total_payments > PAGE_SIZE:
+        total_pages = (total_payments + PAGE_SIZE - 1) // PAGE_SIZE
         pagination_text = f"(صفحه {page + 1} از {total_pages})"
         header_text += f"\n{escape_markdown(pagination_text)}"
 
     lines = [header_text]
     paginated_payments = payments[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
 
-    for payment in paginated_payments:
+    for i, payment in enumerate(paginated_payments):
+        payment_number = total_payments - (page * PAGE_SIZE + i)
+        label = "تاریخ خرید" if payment_number == 1 else "تاریخ تمدید"
         shamsi_datetime = format_shamsi_tehran(payment.get('payment_date'))
-        lines.append(f"`•` تاریخ تمدید: `{shamsi_datetime}`")
+        lines.append(f"`•` {label}: `{shamsi_datetime}`")
 
     return "\n".join(lines)
 

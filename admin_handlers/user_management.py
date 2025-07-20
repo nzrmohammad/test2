@@ -303,7 +303,6 @@ def _handle_global_search_response(message: types.Message):
         results = combined_handler.search_user(query)
 
         if not results:
-            # تغيير: نقطه در انتهای پیام escape شد
             _safe_edit(uid, original_msg_id, f"❌ کاربری با مشخصات `{escape_markdown(query)}` یافت نشد\\.",
                        reply_markup=menu.cancel_action("admin:management_menu"))
             return
@@ -323,7 +322,7 @@ def _handle_global_search_response(message: types.Message):
                 panel_short = 'h' if panel == 'hiddify' else 'm'
                 text = fmt_admin_user_summary(info, db_user)
                 kb = menu.admin_user_interactive_management(identifier, info.get('is_active', False), panel,
-                                                            back_callback="admin:management_menu")
+                                                            back_callback="admin:search_menu")
                 _safe_edit(uid, original_msg_id, text, reply_markup=kb)
         else:
             kb = types.InlineKeyboardMarkup()
@@ -367,47 +366,47 @@ def _handle_global_search_response(message: types.Message):
 
     except Exception as e:
         logger.error(f"Global search failed for query '{query}': {e}", exc_info=True)
-        _safe_edit(uid, original_msg_id, "❌ خطایی در هنگام جستجو رخ داد. ممکن است پنل‌ها در دسترس نباشند.",
+        _safe_edit(uid, original_msg_id, "❌ خطایی در هنگام جستجو رخ داد\\. ممکن است پنل‌ها در دسترس نباشند\\.",
                    reply_markup=menu.admin_management_menu())
 
 
 def handle_log_payment(call, params):
-    # تغيير: پانل از شناسه استخراج می‌شود
     identifier = params[0]
     uid, msg_id = call.from_user.id, call.message.message_id
 
     info = combined_handler.get_combined_user_info(identifier)
     if not info or not info.get('uuid'):
-        bot.answer_callback_query(call.id, "❌ کاربر یافت نشد یا UUID ندارد.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ کاربر یافت نشد یا UUID ندارد\\.", show_alert=True)
         return
 
     uuid_id = db.get_uuid_id_by_uuid(info['uuid'])
     if not uuid_id:
-        bot.answer_callback_query(call.id, "❌ کاربر در دیتابیس ربات یافت نشد.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ کاربر در دیتابیس ربات یافت نشد\\.", show_alert=True)
         return
 
+    previous_payments_count = len(db.get_user_payment_history(uuid_id))
+    
     if db.add_payment_record(uuid_id):
         user_telegram_id = db.get_user_id_by_uuid(info['uuid'])
         user_name = escape_markdown(info.get('name', ''))
         
-        # تغيير ۱: نقطه در پیام نوتیفیکیشن به کاربر escape شد
+        action_text = "خریداری شد" if previous_payments_count == 0 else "تمدید شد"
+        
         notification_text = (
             f"با تشکر از شما 🙏\n\n"
-            f"✅ پرداخت شما برای اکانت *{user_name}* با موفقیت ثبت و سرویس شما تمدید شد\\."
+            f"✅ پرداخت شما برای اکانت *{user_name}* با موفقیت ثبت و سرویس شما *{action_text}*\\."
         )
         _notify_user(user_telegram_id, notification_text)
 
-        # پانل برای منوی بازگشت از اطلاعات جدید گرفته می‌شود
         panel_for_menu = 'hiddify' if 'hiddify' in info.get('breakdown', {}) else 'marzban'
         
-        # تغيير ۲: نقطه در پیام تأیید برای ادمین escape شد
-        text_to_show = fmt_admin_user_summary(info) + "\n\n*✅ پرداخت با موفقیت ثبت شد\\.*"
+        text_to_show = fmt_admin_user_summary(info) + f"\n\n*✅ پرداخت با موفقیت ثبت شد\\.*"
         
         kb = menu.admin_user_interactive_management(identifier, info['is_active'], panel_for_menu,
                                                     back_callback=call.data.split(':')[-1])
         _safe_edit(uid, msg_id, text_to_show, reply_markup=kb)
     else:
-        bot.answer_callback_query(call.id, "❌ خطا در ثبت پرداخت.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ خطا در ثبت پرداخت\\.", show_alert=True)
 
 
 def handle_payment_history(call, params):

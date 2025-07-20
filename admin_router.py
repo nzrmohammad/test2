@@ -37,6 +37,21 @@ def _handle_management_menu(call, params):
     """Shows the user management menu."""
     _safe_edit(call.from_user.id, call.message.message_id, "👥 مدیریت کاربران", reply_markup=menu.admin_management_menu())
 
+def _handle_search_menu(call, params):
+    """Shows the search sub-menu."""
+    _safe_edit(call.from_user.id, call.message.message_id, "🔎 لطفاً نوع جستجو را انتخاب کنید:", reply_markup=menu.admin_search_menu())
+
+def _handle_group_actions_menu(call, params):
+    """Shows the group actions sub-menu."""
+    _safe_edit(call.from_user.id, call.message.message_id, "⚙️ لطفاً نوع دستور گروهی را انتخاب کنید:", reply_markup=menu.admin_group_actions_menu())
+
+def _handle_user_analysis_menu(call, params):
+    _safe_edit(call.from_user.id, call.message.message_id, "📈 لطفاً نوع تحلیل را انتخاب کنید:", reply_markup=menu.admin_user_analysis_menu())
+
+# تابع جدید: برای نمایش منوی وضعیت سیستم
+def _handle_system_status_menu(call, params):
+    _safe_edit(call.from_user.id, call.message.message_id, "📊 لطفاً پنل مورد نظر برای مشاهده وضعیت را انتخاب کنید:", reply_markup=menu.admin_system_status_menu())
+
 def _handle_panel_management_menu(call, params):
     """Shows the management menu for a specific panel (Hiddify/Marzban)."""
     bot.clear_step_handler_by_chat_id(call.from_user.id)
@@ -70,6 +85,12 @@ ADMIN_CALLBACK_HANDLERS = {
     "management_menu": _handle_management_menu,
     "manage_panel": _handle_panel_management_menu,
     "select_server": _handle_server_selection,
+    "search_menu": _handle_search_menu,
+    "group_actions_menu": _handle_group_actions_menu,
+    "reports_menu": reporting.handle_reports_menu,
+    "panel_reports": reporting.handle_panel_specific_reports_menu,
+    "user_analysis_menu": _handle_user_analysis_menu,
+    "system_status_menu": _handle_system_status_menu,
     
     # User Actions
     "add_user": lambda c, p: (_start_add_user_convo if p[0] == 'hiddify' else _start_add_marzban_user_convo)(c.from_user.id, c.message.message_id),
@@ -87,12 +108,10 @@ ADMIN_CALLBACK_HANDLERS = {
     "rsa": user_management.handle_reset_usage_action,
     "del_cfm": user_management.handle_delete_user_confirm,
     "del_a": user_management.handle_delete_user_action,
-    "note": user_management.handle_ask_for_note, # --- ADD THIS LINE ---
+    "note": user_management.handle_ask_for_note,
+    "search_by_tid": user_management.handle_search_by_telegram_id_convo,
     
-    # --- Reporting & Analytics (FIXED SECTION) ---
-    "reports_menu": reporting.handle_reports_menu, # <--- این خط اصلاح/اضافه شد
-    "panel_reports": reporting.handle_panel_specific_reports_menu, # <--- این خط جدید است
-    "analytics_menu": reporting.handle_analytics_menu,
+    # Reporting & Analytics
     "health_check": reporting.handle_health_check,
     "marzban_stats": reporting.handle_marzban_system_stats,
     "list": reporting.handle_paginated_list,
@@ -100,14 +119,12 @@ ADMIN_CALLBACK_HANDLERS = {
     "list_by_plan": reporting.handle_list_users_by_plan,
     "list_no_plan": reporting.handle_list_users_no_plan,
     
-    # --- Group Actions ---
+    # Group Actions
     "group_action_select_plan": group_actions.handle_select_plan_for_action,
     "ga_select_type": group_actions.handle_select_action_type,
     "ga_ask_value": group_actions.handle_ask_action_value,
     "adv_ga_select_filter": group_actions.handle_select_advanced_filter,
     "adv_ga_select_action": group_actions.handle_select_action_for_filter,
-    "search_by_tid": user_management.handle_search_by_telegram_id_convo, # --- ADD THIS LINE ---
-
     
     # Other Admin Tools
     "broadcast": broadcast.start_broadcast_flow,

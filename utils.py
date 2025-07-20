@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Union, Optional
 import pytz
 import json
@@ -111,15 +111,13 @@ def parse_volume_string(volume_str: str) -> int:
         return int(numbers[0])
     return 0
 
-def gregorian_to_shamsi_str(gregorian_date: Optional[Union[datetime, datetime.date]]) -> str:
+def gregorian_to_shamsi_str(gregorian_date: Optional[Union[datetime, date]]) -> str:
     if not gregorian_date:
         return "نامشخص"
 
-    # اگر ورودی از نوع date است، آن را به datetime تبدیل کن
-    if isinstance(gregorian_date, datetime.date) and not isinstance(gregorian_date, datetime):
+    if isinstance(gregorian_date, date) and not isinstance(gregorian_date, datetime):
         gregorian_date = datetime.combine(gregorian_date, datetime.min.time())
 
-    # اگر ورودی از نوع معتبری نیست، خطا برگردان
     if not isinstance(gregorian_date, datetime):
         return "نامشخص"
         

@@ -18,7 +18,7 @@ class MarzbanAPIHandler:
         self.access_token = None
         self.utc_tz = pytz.utc
         self.uuid_to_username_map, self.username_to_uuid_map = {}, {}
-        self.reload_uuid_maps() # فراخوانی در زمان ساخت نمونه
+        self.reload_uuid_maps()
 
     def reload_uuid_maps(self) -> bool:
         """Loads or reloads the UUID-to-Marzban-Username mapping from the JSON file."""
@@ -79,30 +79,18 @@ class MarzbanAPIHandler:
             return None
 
     def add_user(self, user_data: dict) -> dict | None:
-        if not self.access_token:
-            return None
-        
-        try:
-            url = f"{self.base_url}/api/user"
-            headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
-            
-            expire_timestamp = 0
-            if user_data.get('package_days', 0) > 0:
-                expire_timestamp = int((datetime.now() + timedelta(days=user_data.get('package_days', 0))).timestamp())
+        expire_timestamp = 0
+        if user_data.get('package_days', 0) > 0:
+            expire_timestamp = int((datetime.now() + timedelta(days=user_data.get('package_days', 0))).timestamp())
 
-            payload = {
-                "username": user_data.get('username'),
-                "proxies": {"vless": {}},
-                "data_limit": int(user_data.get('usage_limit_GB', 0) * (1024**3)),
-                "expire": expire_timestamp,
-            }
-            
-            response = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Marzban: Failed to add user '{user_data.get('username')}': {e}")
-            return None
+        payload = {
+            "username": user_data.get('username'),
+            "proxies": {"vless": {}},
+            "data_limit": int(user_data.get('usage_limit_GB', 0) * (1024**3)),
+            "expire": expire_timestamp,
+        }
+        
+        return self._request("POST", "/user", json=payload)
 
     def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
         if not self.access_token:

@@ -128,11 +128,10 @@ def _show_filtered_plans(call: types.CallbackQuery):
     
     all_plans = load_service_plans()
     filtered_plans = [p for p in all_plans if p.get("type") == plan_type]
-    
     text = fmt_service_plans(filtered_plans, plan_type)
     
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data="view_plans"))
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton(f"{EMOJIS['back']} بازگشت", callback_data="view_plans"))
     _safe_edit(call.from_user.id, call.message.message_id, text, reply_markup=kb)
 
 def _handle_support_request(call: types.CallbackQuery):
@@ -180,43 +179,53 @@ def handle_user_callbacks(call: types.CallbackQuery):
         _safe_edit(uid, msg_id, "⚙️ *تنظیمات شما به‌روز شد*", reply_markup=menu.settings(db.get_user_settings(uid)))
 
     elif data.startswith("getlinks_"):
-            uuid_id = int(data.split("_")[1])
-            row = db.uuid_by_id(call.from_user.id, uuid_id)
-            if not row:
-                bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد", show_alert=True)
-                return
+        uuid_id = int(data.split("_")[1])
+        text = (
+            "لطفاً نوع لینک اشتراک مورد نظر خود را انتخاب کنید:\n\n"
+            "*Normal:* برای اکثر اپلیکیشن‌ها در اندروید و ویندوز مناسب است\\.\n"
+            "*Base64:* برای اپلیکیشن‌هایی مانند NapsternetV در iOS مناسب است\\."
+        )
+        _safe_edit(uid, msg_id, text, reply_markup=menu.get_links_menu(uuid_id))
+    
+    # تغيير: این بلوک کامل برای پردازش دکمه‌های لینک اضافه شد
+    elif data.startswith("getlink_normal_") or data.startswith("getlink_b64_"):
+        parts = data.split("_")
+        link_type = parts[1]
+        uuid_id = int(parts[2])
 
-            user_uuid = row['uuid']
-            custom_links = load_custom_links()
-            user_links_data = custom_links.get(user_uuid)
+        row = db.uuid_by_id(uid, uuid_id)
+        if not row:
+            bot.answer_callback_query(call.id, "❌ خطا: اطلاعات اکانت یافت نشد", show_alert=True)
+            return
+
+        user_uuid = row['uuid']
+        custom_links = load_custom_links()
+        user_links_data = custom_links.get(user_uuid)
+        link_key = 'normal' if link_type == 'normal' else 'base64'
+        
+        if user_links_data and user_links_data.get(link_key):
+            link_id = user_links_data[link_key]
+            full_sub_link = CUSTOM_SUB_LINK_BASE_URL.rstrip('/') + '/' + link_id.lstrip('/') if not link_id.startswith('http') else link_id
             
-            if user_links_data and user_links_data.get('normal'):
-                link_id = user_links_data['normal']
-                if link_id.startswith('http'):
-                    full_sub_link = link_id
-                else:
-                    full_sub_link = CUSTOM_SUB_LINK_BASE_URL.rstrip('/') + '/' + link_id.lstrip('/')
-                
-                qr_img = qrcode.make(full_sub_link)
-                stream = io.BytesIO()
-                qr_img.save(stream, 'PNG')
-                stream.seek(0)
-                
-                text = (
-                    f"🔗 *لینک اشتراک شما آماده است*\n\n"
-                    f"۱. برای کپی کردن، روی لینک زیر ضربه بزنید:\n"
-                    f"`{escape_markdown(full_sub_link)}`\n\n"
-                    f"۲. یا کد QR بالا را در اپلیکیشن خود اسکن کنید."
-                )
-                
-                kb = types.InlineKeyboardMarkup()
-                kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"acc_{uuid_id}"))
+            qr_img = qrcode.make(full_sub_link)
+            stream = io.BytesIO()
+            qr_img.save(stream, 'PNG')
+            stream.seek(0)
+            
+            text = (
+                f"🔗 *لینک اشتراک شما ({link_type.capitalize()}) آماده است*\n\n"
+                f"۱\\. برای کپی کردن، روی لینک زیر ضربه بزنید:\n"
+                f"`{escape_markdown(full_sub_link)}`\n\n"
+                f"۲\\. یا کد QR بالا را در اپلیکیشن خود اسکن کنید\\."
+            )
+            
+            kb = types.InlineKeyboardMarkup()
+            kb.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"acc_{uuid_id}"))
 
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-                bot.send_photo(call.from_user.id, photo=stream, caption=text, reply_markup=kb, parse_mode="MarkdownV2")
-
-            else:
-                bot.answer_callback_query(call.id, "❌ لینک سفارشی برای این اکانت در فایل json تعریف نشده است", show_alert=True)
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            bot.send_photo(uid, photo=stream, caption=text, reply_markup=kb, parse_mode="MarkdownV2")
+        else:
+            bot.answer_callback_query(call.id, f"❌ لینک نوع {link_type} برای این اکانت تعریف نشده است", show_alert=True)
             
     elif data.startswith("del_"):
         uuid_id = int(data.split("_")[1])
@@ -242,9 +251,14 @@ def handle_user_callbacks(call: types.CallbackQuery):
 
     elif data.startswith("win_select_"):
         uuid_id = int(data.split("_")[2])
-        if db.uuid_by_id(uid, uuid_id):
+        row = db.uuid_by_id(uid, uuid_id)
+        if row:
+            info = combined_handler.get_combined_user_info(row['uuid'])
+            h_info = info.get('breakdown', {}).get('hiddify', {})
+            m_info = info.get('breakdown', {}).get('marzban', {})
+
             text = "لطفاً سرور مورد نظر خود را برای مشاهده آمار مصرف انتخاب کنید:"
-            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id), parse_mode=None)
+            _safe_edit(uid, msg_id, text, reply_markup=menu.server_selection_menu(uuid_id, show_hiddify=bool(h_info), show_marzban=bool(m_info)), parse_mode=None)
             
     elif data.startswith("qstats_acc_page_"):
         page = int(data.split("_")[3])

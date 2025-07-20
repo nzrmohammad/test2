@@ -144,7 +144,7 @@ def get_all_users_combined() -> List[Dict[str, Any]]:
     h_users = hiddify_handler.get_all_users() or []
     for user in h_users:
         uuid = user['uuid']
-        user['breakdown'] = {'hiddify': user}
+        user['breakdown'] = {'hiddify': user.copy()}
         all_users_map[uuid] = user
 
     # FIX: Handle None return from API handlers
@@ -153,14 +153,14 @@ def get_all_users_combined() -> List[Dict[str, Any]]:
         uuid = user.get('uuid')
         if uuid and uuid in all_users_map:
             # User exists in Hiddify, add Marzban data to their breakdown
-            all_users_map[uuid]['breakdown']['marzban'] = user
+            all_users_map[uuid]['breakdown']['marzban'] = user.copy()
         elif uuid:
             # User only exists in Marzban but has a UUID
-            user['breakdown'] = {'marzban': user}
+            user['breakdown'] = {'marzban': user.copy()}
             all_users_map[uuid] = user
         else:
             # User only exists in Marzban and has no UUID (use username as key)
-            user['breakdown'] = {'marzban': user}
+            user['breakdown'] = {'marzban': user.copy()}
             all_users_map[user['name']] = user
             
     return list(all_users_map.values())
