@@ -18,7 +18,12 @@ class MarzbanAPIHandler:
         self.access_token = None
         self.utc_tz = pytz.utc
         self.uuid_to_username_map, self.username_to_uuid_map = {}, {}
+        self.session = self._create_session() 
         self.reload_uuid_maps()
+
+    def _create_session(self) -> requests.Session:
+        session = requests.Session()
+        return session
 
     def reload_uuid_maps(self) -> bool:
         """Loads or reloads the UUID-to-Marzban-Username mapping from the JSON file."""
@@ -39,11 +44,12 @@ class MarzbanAPIHandler:
         try:
             url = f"{self.api_base_url}/admin/token"
             data = {"username": self.username, "password": self.password}
-            response = requests.post(url, data=data, timeout=API_TIMEOUT)
+            response = self.session.post(url, data=data, timeout=API_TIMEOUT) 
             response.raise_for_status()
             self.access_token = response.json().get("access_token")
             if self.access_token:
                 logger.info("Marzban: Successfully obtained new access token.")
+                self.session.headers.update({"Authorization": f"Bearer {self.access_token}", "Accept": "application/json"})
                 return True
             return False
         except requests.exceptions.RequestException as e:
@@ -62,7 +68,7 @@ class MarzbanAPIHandler:
         kwargs['headers'] = headers
         
         try:
-            response = requests.request(method, url, timeout=API_TIMEOUT, **kwargs)
+            response = self.session.request(method, url, timeout=API_TIMEOUT, **kwargs) 
             if response.status_code == 401 and retry:
                 logger.warning("Marzban: Access token expired or invalid. Retrying to get a new one.")
                 if self._get_access_token():
@@ -92,42 +98,44 @@ class MarzbanAPIHandler:
         
         return self._request("POST", "/user", json=payload)
 
-    def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
-        if not self.access_token:
-            return False
+def modify_user(self, username: str, data: dict = None, add_usage_gb: float = 0, add_days: int = 0) -> bool:
+    # به جای requests.get از self._request استفاده می‌کنیم
+    current_data = self._request("GET", f"/user/{username}")
+    
+    # اگر کاربر یافت نشد یا خطایی رخ داد، عملیات را متوقف کن
+    if not current_data:
+        logger.error(f"Marzban: Failed to get current data for user '{username}' before modification.")
+        return False
 
-        try:
-            get_url = f"{self.base_url}/api/user/{username}"
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            current_response = requests.get(get_url, headers=headers, timeout=API_TIMEOUT)
-            current_response.raise_for_status()
-            current_data = current_response.json()
+    # بقیه کد شما کاملاً درست است و بدون تغییر باقی می‌ماند
+    try:
+        payload = data.copy() if data else {}
 
-            payload = data.copy() if data else {}
+        if add_usage_gb != 0:
+            current_limit = current_data.get('data_limit', 0)
+            payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
 
-            if add_usage_gb != 0:
-                current_limit = current_data.get('data_limit', 0)
-                payload['data_limit'] = current_limit + int(add_usage_gb * (1024**3))
+        if add_days != 0:
+            current_expire_ts = current_data.get('expire', 0)
+            base_time = datetime.fromtimestamp(current_expire_ts) if current_expire_ts > 0 else datetime.now()
+            if base_time < datetime.now():
+                base_time = datetime.now()
+            new_expire_dt = base_time + timedelta(days=add_days)
+            payload['expire'] = int(new_expire_dt.timestamp())
 
-            if add_days != 0:
-                current_expire_ts = current_data.get('expire', 0)
-                base_time = datetime.fromtimestamp(current_expire_ts) if current_expire_ts > 0 else datetime.now()
-                if base_time < datetime.now():
-                    base_time = datetime.now()
-                new_expire_dt = base_time + timedelta(days=add_days)
-                payload['expire'] = int(new_expire_dt.timestamp())
-
-            if not payload:
-                return True
-
-            put_url = f"{self.base_url}/api/user/{username}"
-            response = requests.put(put_url, headers={"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}, json=payload, timeout=API_TIMEOUT)
-            response.raise_for_status()
+        if not payload:
             return True
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Marzban: Failed to modify user '{username}': {e}")
-            return False
+        # برای درخواست PUT نیز از self._request استفاده می‌کنیم تا کد یکپارچه باشد
+        # (گرچه کد قبلی شما برای این بخش هم کار می‌کرد، اما این روش تمیزتر است)
+        response = self._request("PUT", f"/user/{username}", json=payload)
+        
+        # self._request در صورت موفقیت True برمی‌گرداند یا JSON، پس باید بررسی کنیم None نباشد
+        return response is not None
+
+    except Exception as e:
+        logger.error(f"Marzban: Failed to process payload for modifying user '{username}': {e}")
+        return False
         
     def _parse_marzban_datetime(self, date_str: str | None) -> datetime | None:
             if not date_str:

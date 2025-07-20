@@ -67,13 +67,17 @@ def _handle_server_selection(call, params):
                reply_markup=menu.admin_server_selection_menu(f"admin:{base_callback}"))
     
 def _handle_reload_maps(call, params):
-    """Handles the request to reload Marzban user mappings."""
-    bot.answer_callback_query(call.id, "⏳ در حال رفرش کردن مپینگ کاربران مرزبان...")
-    success = marzban_handler.reload_uuid_maps()
+    bot.answer_callback_query(call.id, "⏳ در حال رفرش کردن...")
+    success = marzban_handler.reload_uuid_maps() #
+    
     if success:
-        bot.send_message(call.from_user.id, "✅ مپینگ کاربران مرزبان با موفقیت به‌روز شد.", parse_mode=None)
+        response_text = "✅ *مپینگ با موفقیت به‌روز شد\\.*\n\nاطلاعات کاربران پنل مرزبان از فایل `uuid_to_marzban_user\\.json` مجدداً بارگذاری شد\\."
     else:
-        bot.send_message(call.from_user.id, "❌ خطا در به‌روزرسانی مپینگ. لطفاً لاگ‌ها را بررسی کنید.", parse_mode=None)
+        response_text = "❌ *خطا در به‌روزرسانی مپینگ\\.*\n\nلطفاً از صحت فایل `uuid_to_marzban_user\\.json` مطمئن شوید و لاگ‌های ربات را بررسی کنید\\."
+        
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("🔙 بازگشت به وضعیت سیستم", callback_data="admin:system_status_menu"))
+    _safe_edit(call.from_user.id, call.message.message_id, response_text, reply_markup=kb)
 
 
 # ===================================================================
